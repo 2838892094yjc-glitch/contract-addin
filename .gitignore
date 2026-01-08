@@ -1,0 +1,73 @@
+# Node modules
+node_modules/
+
+# Backup files
+*.bak*
+*.backup
+*backup*
+backups/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local config
+.env
+.env.local
+
+# Office dev certs (don't publish)
+*.crt
+*.key
+*.pem
+
+# Temp files
+/tmp/
+*.tmp
+
+# Log files
+*.log
+npm-debug.log*
+
+# Python scripts (not needed for add-in)
+*.py
+*.pyc
+
+# Image files (except assets)
+*.png
+*.jpg
+*.jpeg
+
+# Word documents (sample files)
+*.docx
+境内融资文件*/
+境内融资文件 2/
+
+# JSON data files
+ocr_results.json
+terms_list*.json
+form-config.json
+glossary*.txt
+
+# Scripts (local only)
+scripts/
+start.sh
+
+# Old/draft files
+*_draft.js
+*_new.js
+*_new_config.js
+*_customxml.js
+*_logic_update.js
+diff_analysis.txt
+
+# Cursor rules (local)
+.cursorrules
+PROJECT_*.md
+COLLABORATION_GUIDE.md
+
+# External manifest (for ngrok)
+manifest-external.xml
+
+# CSV files
+*.csv
+

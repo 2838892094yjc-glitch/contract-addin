@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>合同起草助手</title>
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <!-- 引入 PizZip 和 Docxtemplater -->
+    <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip.js"></script>
+    <script src="https://unpkg.com/docxtemplater@3.37.11/build/docxtemplater.js"></script>
+    <!-- 引入 MSAL.js 用于 Azure AD 认证 -->
+    <script type="text/javascript" src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
+    <link rel="stylesheet" href="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-core/11.0.0/css/fabric.min.css">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --primary-light: #dbeafe;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --input-bg: #f8fafc;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.1);
+            --radius-sm: 10px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 28px;
+            --sidebar-width: 220px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", "Segoe UI", "PingFang SC", system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* ========== 侧边进度栏 (Step Timeline) - 右侧布局 ========== */
+        .step-sidebar {
+            width: var(--sidebar-width);
+            background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+            border-left: 1px solid var(--border-color);
+            height: 100vh;
+            position: fixed;
+            right: 0;
+            top: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.04);
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 transparent;
+        }
+
+        /* 侧边栏滚动条美化 */
+        .step-sidebar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .step-sidebar::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        .step-header {
+            padding: 20px 16px 12px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, #3b82f6 100%);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .step-header h2 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .step-list {
+            list-style: none;
+            margin: 0;
+            padding: 16px 12px 30px;
+            position: relative;
+        }
+
+        .step-list::before {
+            content: '';
+            position: absolute;
+            left: 23px;
+            top: 30px;
+            bottom: 50px;
+            width: 2px;
+            background: linear-gradient(180deg, var(--border-color) 0%, transparent 100%);
+            border-radius: 2px;
+            z-index: 0;
+        }
+
+        .step-item {
+            position: relative;
+            padding-left: 32px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            z-index: 1;
+            transition: all 0.25s ease;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            border-radius: var(--radius-sm);
+        }
+
+        .step-item:hover {
+            background: var(--primary-light);
+        }
+
+        .step-marker {
+            position: absolute;
+            left: 0;
+            top: 4px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #cbd5e1;
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 2;
+        }
+
+        .step-title {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            word-break: break-all;
+        }
+
+        /* 小标题样式 */
+        .step-item.sub-step {
+            margin-bottom: 4px;
+            padding-left: 40px;
+        }
+        .step-item.sub-step .step-marker {
+            width: 10px;
+            height: 10px;
+            left: 7px;
+            top: 8px;
+            border-width: 1.5px;
+        }
+        .step-item.sub-step .step-title {
+            font-size: 11px;
+            font-weight: 400;
+            color: #94a3b8;
+        }
+
+        .step-item.active .step-marker {
+            border-color: var(--primary-color);
+            color: #fff;
+            background: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+            transform: scale(1.1);
+        }
+        .step-item.active .step-title {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .step-item.completed .step-marker {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-color: #10b981;
+            color: white;
+        }
+        .step-item.completed .step-title {
+            color: #10b981;
+        }
+
+        /* ========== 主内容区域 ========== */
+        .main-content {
+            margin-right: var(--sidebar-width);
+            margin-left: 0;
+            flex: 1;
+            padding: 24px 28px;
+            max-width: 100%;
+            width: auto;
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .header {
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--primary-color);
+            margin-bottom: 24px;
+        }
+
+        .header h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0 0 6px 0;
+        }
+
+        .header .instruction {
+            color: var(--text-secondary);
+            font-size: 13px;
+            margin: 0;
+        }
+
+        .form-group {
+            background: var(--card-bg);
+            padding: 18px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            width: 100%;
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .form-group:hover {
+            box-shadow: var(--shadow-md);
+            border-color: #cbd5e1;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100% !important;
+            max-width: 100%;
+            box-sizing: border-box;
+            border-radius: var(--radius-sm) !important;
+        }
+
+        @media (max-width: 700px) {
+            .step-sidebar {
+                width: 160px;
+            }
+            .main-content {
+                margin-right: 160px;
+                padding: 16px;
+            }
+            .step-title {
+                font-size: 11px;
+            }
+        }
+    
+        /* ========== AI 助手模块美化 ========== */
+        .ai-section {
+            background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .ai-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color) 0%, #8b5cf6 100%);
+        }
+        .ai-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .ai-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .ai-input-wrapper {
+            position: relative;
+            background: #fff;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 14px;
+            transition: all 0.25s ease;
+        }
+        .ai-input-wrapper:focus-within {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+        .ai-textarea {
+            width: 100% !important;
+            height: 80px;
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 14px;
+            line-height: 1.7;
+            color: var(--text-main);
+            resize: none;
+            outline: none !important;
+            font-family: inherit;
+        }
+        .ai-footer {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 14px;
+        }
+        .ai-btn {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #3b82f6 100%);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-xl);
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+        }
+        .ai-btn:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+        }
+
+        /* ========== 云端同步模块美化 ========== */
+        .cloud-section {
+            background: linear-gradient(135deg, #fff 0%, #f0f9ff 100%);
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            box-shadow: var(--shadow-md);
+            border: 1.5px solid #93c5fd;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .cloud-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%);
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            color: #059669;
+            border-radius: var(--radius-xl);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 14px;
+        }
+        .cloud-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .cloud-input-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .cloud-path-box {
+            display: flex;
+            gap: 10px;
+        }
+        .cloud-input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .cloud-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .scan-btn {
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            border: 1px solid var(--border-color);
+            padding: 0 20px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-main);
+            transition: all 0.2s;
+        }
+        .scan-btn:hover { 
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+        }
+        
+        .file-list-container {
+            max-height: 160px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            background: #fff;
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            margin-bottom: 16px;
+        }
+        .sync-btn-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* ========== 浮动按钮 (FAB) - 左下角 ========== */
+        .custom-field-fab {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            z-index: 200;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .custom-field-fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 28px rgba(139, 92, 246, 0.5);
+        }
+        .custom-field-fab.active {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+        }
+        .custom-field-fab .icon-close { display: none; }
+        .custom-field-fab.active .icon-add { display: none; }
+        .custom-field-fab.active .icon-close { display: inline; }
+
+        /* ========== 底部弹出面板 ========== */
+        .custom-field-drawer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: var(--sidebar-width);
+            height: 220px;
+            background: #fff;
+            box-shadow: 0 -8px 30px rgba(0,0,0,0.12);
+            z-index: 199;
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-top-left-radius: var(--radius-lg);
+            border-top-right-radius: var(--radius-lg);
+        }
+        .custom-field-drawer.open {
+            transform: translateY(0);
+        }
+        .drawer-header {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .drawer-header h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .drawer-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .drawer-action-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background 0.2s;
+        }
+        .drawer-action-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .drawer-close {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: #fff;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        .drawer-close:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .drawer-body {
+            flex: 1;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 12px 16px;
+            display: flex;
+            align-items: stretch;
+            gap: 12px;
+        }
+
+        /* 添加字段卡片 */
+        .add-field-card {
+            min-width: 100px;
+            height: 100%;
+            border: 2px dashed #c4b5fd;
+            border-radius: var(--radius-md);
+            background: #faf5ff;
+            color: #8b5cf6;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .add-field-card:hover {
+            border-color: #8b5cf6;
+            background: #ede9fe;
+        }
+        .add-field-card i { font-size: 24px; }
+
+        /* 自定义字段卡片 - 可拖拽 */
+        .custom-field-card {
+            min-width: 160px;
+            max-width: 200px;
+            height: 100%;
+            background: #fff;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.2s;
+            cursor: grab;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .custom-field-card:hover {
+            border-color: #8b5cf6;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+        }
+        .custom-field-card.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+        .custom-field-card .field-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .custom-field-card .field-meta {
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+        .custom-field-card .field-actions {
+            display: flex;
+            gap: 4px;
+            margin-top: auto;
+        }
+        .custom-field-card .field-action-btn {
+            flex: 1;
+            padding: 6px 8px;
+            font-size: 11px;
+        }
+        .custom-field-card .field-delete-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 2px;
+            font-size: 12px;
+            border-radius: 4px;
+            opacity: 0;
+            transition: all 0.2s;
+        }
+        .custom-field-card:hover .field-delete-btn {
+            opacity: 1;
+        }
+        .custom-field-card .field-delete-btn:hover {
+            color: #ef4444;
+            background: #fef2f2;
+        }
+
+        /* 拖拽放置区 */
+        .drop-zone {
+            display: none;
+            min-height: 40px;
+            border: 2px dashed #8b5cf6;
+            border-radius: var(--radius-sm);
+            background: #faf5ff;
+            margin: 8px 0;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .drop-zone::after {
+            content: '拖放到此处';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #8b5cf6;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .drop-zone.drag-over {
+            background: #ede9fe;
+            border-color: #7c3aed;
+            min-height: 60px;
+        }
+        body.dragging-field .drop-zone {
+            display: block;
+        }
+
+        /* 空状态 */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            padding: 20px;
+        }
+        .empty-state i {
+            font-size: 32px;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+        }
+        .empty-state p {
+            margin: 0;
+            font-size: 13px;
+        }
+
+        /* ========== 添加/编辑字段弹窗 ========== */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 300;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.show {
+            display: flex;
+        }
+        .modal-content {
+            background: #fff;
+            border-radius: var(--radius-lg);
+            width: 400px;
+            max-width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+        }
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-header h3 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px;
+        }
+        .modal-body {
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .modal-field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .modal-field-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+        .modal-field-group input,
+        .modal-field-group select,
+        .modal-field-group textarea {
+            padding: 9px 12px;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .modal-field-group input:focus,
+        .modal-field-group select:focus,
+        .modal-field-group textarea:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+        .modal-field-group .help-text {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .modal-field-group .tag-preview {
+            font-size: 11px;
+            color: #8b5cf6;
+            background: #faf5ff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+        .modal-footer {
+            padding: 14px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .modal-footer button {
+            padding: 9px 18px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .modal-cancel {
+            background: #f1f5f9;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .modal-cancel:hover { background: #e2e8f0; }
+        .modal-confirm {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: #fff;
+            border: none;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+        }
+        .modal-confirm:hover {
+            box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35);
+        }
+
+        /* 插入模式选择 */
+        .insert-mode-options {
+            display: flex;
+            gap: 6px;
+        }
+        .insert-mode-option {
+            flex: 1;
+            padding: 8px;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: #fff;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .insert-mode-option:hover {
+            border-color: #8b5cf6;
+        }
+        .insert-mode-option.selected {
+            border-color: #8b5cf6;
+            background: #faf5ff;
+            color: #7c3aed;
+        }
+        .insert-mode-option input {
+            display: none;
+        }
+
+        /* 表单字段编辑按钮 */
+        .form-group .field-edit-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 4px;
+            font-size: 14px;
+            border-radius: 4px;
+            opacity: 0;
+            transition: all 0.2s;
+        }
+        .form-group:hover .field-edit-btn {
+            opacity: 1;
+        }
+        .form-group .field-edit-btn:hover {
+            color: #8b5cf6;
+            background: #faf5ff;
+        }
+        .form-group {
+            position: relative;
+        }
+
+        /* 自定义字段在表单中的标识 */
+        .form-group.custom-field-in-form {
+            border-left: 4px solid #8b5cf6 !important;
+        }
+        .form-group.custom-field-in-form .label-row label {
+            color: #7c3aed;
+        }
+
+    </style>
+</head>
+<body>
+    <!-- 侧边进度栏 -->
+    <aside class="step-sidebar">
+        <div class="step-header">
+            <h2>
+                <i class="ms-Icon ms-Icon--TextDocument" aria-hidden="true"></i>
+                合同导航
+            </h2>
+        </div>
+        <ul class="step-list" id="step-list">
+            <!-- 由 JS 动态生成 -->
+            <!-- 示例结构：
+            <li class="step-item active">
+                <div class="step-marker">1</div>
+                <div class="step-content">
+                    <div class="step-title">所需文件</div>
+                </div>
+            </li>
+            -->
+        </ul>
+    </aside>
+
+    <!-- 主内容区域 -->
+    <main class="main-content">
+        <div class="container">
+            
+            <div class="header">
+                <h2>合同起草助手</h2>
+                <p class="instruction">智能识别意图，秒级生成条款</p>
+            </div>
+
+            <!-- AI 智能模块 - 全局可用 -->
+            <div class="ai-section" id="ai-assistant-section">
+                <div class="ai-header">
+                    <i class="ms-Icon ms-Icon--Robot" style="color:var(--primary-color); font-size:18px;"></i>
+                    <span class="ai-title">AI 智能助手</span>
+                </div>
+                <div class="ai-input-wrapper">
+                    <textarea id="ai-input" class="ai-textarea" placeholder="在此输入投资意向，例如：“腾讯领投B轮，投资500万美元，有一票否决权...”"></textarea>
+                </div>
+                <div class="ai-footer">
+                    <button id="btn-ai-fill" class="ai-btn">
+                        <i class="ms-Icon ms-Icon--LightningBolt"></i>
+                        智能识别并填充表单
+                    </button>
+                </div>
+            </div>
+
+            <!-- 云端同步模块 -->
+            <div id="cloud-sync-section" class="cloud-section">
+                <div class="ai-header">
+                    <i class="ms-Icon ms-Icon--CloudUpload" style="color:#0078d4; font-size:18px;"></i>
+                    <span class="ai-title" style="color:#0078d4;">云端交易文件同步</span>
+                </div>
+                
+                <!-- 未登录 -->
+                <div id="auth-login-container">
+                    <p class="instruction" style="margin-bottom:12px;">登录 Microsoft 账号以同步 OneDrive 文件</p>
+                    <button id="btn-login" class="ai-btn" style="background:#0078d4; width:100%; justify-content:center;">
+                        <i class="ms-Icon ms-Icon--Signin"></i> 登录 Microsoft 365
+                    </button>
+                </div>
+
+                <!-- 已登录 -->
+                <div id="auth-connected-container" style="display:none;">
+                    <div class="status-badge">
+                        <i class="ms-Icon ms-Icon--CheckMark"></i>
+                        已连接：<span id="user-name">User</span>
+                    </div>
+                    
+                    <div class="cloud-input-group">
+                        <label>目标文件夹（OneDrive）</label>
+                        <div class="cloud-path-box">
+                            <input type="text" id="drive-folder-path" value="/" class="cloud-input" placeholder="例如 /Contracts">
+                            <button id="btn-list-files" class="scan-btn">扫描</button>
+                        </div>
+                    </div>
+
+                    <div id="cloud-file-list" class="file-list-container">
+                        <p style="color:#999; text-align:center; padding:20px; font-size:12px;">点击扫描获取文件列表</p>
+                    </div>
+
+                    <div class="sync-btn-container">
+                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:#666; cursor:pointer;">
+                            <input type="checkbox" id="toggle-auto-sync" checked style="width:14px; height:14px;">
+                            表单修改后自动同步（无感更新）
+                        </label>
+                        <button id="btn-batch-sync" class="ai-btn" disabled style="background:#107c10; width:100%; justify-content:center;">
+                            <i class="ms-Icon ms-Icon--Sync"></i> 批量更新所选文件
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 本地同步模块 -->
+            <div id="local-sync-section" class="cloud-section" style="background: linear-gradient(135deg, #fff 0%, #f0fff4 100%); border-left: 4px solid #10b981;">
+                <div class="ai-header">
+                    <i class="ms-Icon ms-Icon--DocumentReply" style="color:#10b981; font-size:18px;"></i>
+                    <span class="ai-title" style="color:#10b981;">本地文档同步</span>
+                </div>
+                <p class="instruction" style="margin-bottom:12px; font-size: 12px; color: #666;">
+                    将已保存的表单数据一键应用到当前打开的文档（无需网络）
+                </p>
+                <button id="btn-apply-form" class="ai-btn" style="background:#10b981; width:100%; justify-content:center;" onclick="applyFormToCurrentDocument()">
+                    <i class="ms-Icon ms-Icon--Download"></i> 📥 应用表单到当前文档
+                </button>
+                <p style="margin-top: 8px; font-size: 11px; color: #999; text-align: center;">
+                    提示：此功能会将表单数据写入当前文档中所有匹配的埋点
+                </p>
+            </div>
+
+            <div id="dynamic-form-container">
+                <!-- JavaScript 会自动往这里填充内容 -->
+            </div>
+
+            <!-- 合同交付区域 -->
+            <div id="section-finalize" class="ai-section" style="margin-top: 30px; border: 2px solid #107c10;">
+                <div class="ai-header">
+                    <i class="ms-Icon ms-Icon--Package" aria-hidden="true" style="color:#107c10; font-size:18px;"></i>
+                    <span class="ai-title" style="color:#107c10;">合同交付</span>
+                </div>
+                
+                <p class="instruction" style="margin-bottom: 12px;">
+                    完成合同后，点击下方按钮清理所有隐藏标记（<code>[▶已隐藏]</code>），生成可交付的干净版本。
+                </p>
+                
+                <p class="instruction" style="font-size: 12px; color: #d83b01; margin-bottom: 12px;">
+                    ⚠️ 此操作不可撤销！建议先通过 OneDrive 手动复制一份备份。
+                </p>
+                
+                <label class="instruction" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; cursor: pointer;">
+                    <input type="checkbox" id="finalize-remove-cc" checked style="width: 16px; height: 16px;">
+                    同时移除所有埋点（Content Control），生成纯净文档
+                </label>
+                
+                <button id="btn-finalize-contract" class="ai-btn" style="background: linear-gradient(135deg, #107c10, #0b5c0b);">
+                    <i class="ms-Icon ms-Icon--CheckMark" aria-hidden="true"></i>
+                    🎯 完成合同并清理
+                </button>
+                
+                <div id="finalize-status" style="margin-top: 10px; font-size: 12px; color: #666; min-height: 18px;"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 浮动按钮 (FAB) - 左下角 -->
+    <button class="custom-field-fab" id="custom-field-fab" title="自定义字段管理">
+        <i class="ms-Icon ms-Icon--Add icon-add" aria-hidden="true"></i>
+        <i class="ms-Icon ms-Icon--Cancel icon-close" aria-hidden="true"></i>
+    </button>
+
+    <!-- 底部弹出面板 -->
+    <div class="custom-field-drawer" id="custom-field-drawer">
+        <div class="drawer-header">
+            <h3>
+                <i class="ms-Icon ms-Icon--FieldEmpty" aria-hidden="true"></i>
+                自定义字段（拖拽到表单中使用）
+            </h3>
+            <div class="drawer-actions">
+                <button class="drawer-action-btn" id="btn-export-config" title="导出完整配置">
+                    <i class="ms-Icon ms-Icon--Download" aria-hidden="true"></i> 导出
+                </button>
+                <button class="drawer-action-btn" id="btn-import-config" title="导入配置">
+                    <i class="ms-Icon ms-Icon--Upload" aria-hidden="true"></i> 导入
+                </button>
+                <button class="drawer-action-btn" id="btn-reset-config" title="重置为默认" style="background:rgba(239,68,68,0.2);">
+                    <i class="ms-Icon ms-Icon--Refresh" aria-hidden="true"></i> 重置
+                </button>
+                <input type="file" id="import-config-input" accept=".json" style="display:none;">
+                <button class="drawer-close" id="drawer-close">
+                    <i class="ms-Icon ms-Icon--Cancel" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+        <div class="drawer-body" id="custom-field-list">
+            <!-- 添加卡片 -->
+            <div class="add-field-card" id="btn-add-field">
+                <i class="ms-Icon ms-Icon--Add" aria-hidden="true"></i>
+                <span>添加字段</span>
+            </div>
+            <!-- 动态生成的字段卡片 -->
+        </div>
+    </div>
+
+    <!-- 添加/编辑字段弹窗 -->
+    <div class="modal-overlay" id="add-field-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">添加自定义字段</h3>
+                <button class="modal-close" id="modal-close">
+                    <i class="ms-Icon ms-Icon--Cancel" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-field-group">
+                    <label>字段名称 *</label>
+                    <input type="text" id="field-label" placeholder="例如：特殊条款、额外费用">
+                    <div class="tag-preview" id="tag-preview" style="display:none;">Tag: <span id="tag-preview-text"></span></div>
+                </div>
+                <div class="modal-field-group">
+                    <label>字段类型</label>
+                    <select id="field-type">
+                        <option value="text">文本</option>
+                        <option value="number">数字</option>
+                        <option value="date">日期</option>
+                        <option value="select">下拉选择</option>
+                        <option value="radio">单选按钮</option>
+                    </select>
+                </div>
+                <div class="modal-field-group" id="options-group" style="display:none;">
+                    <label>选项（每行一个）</label>
+                    <textarea id="field-options" rows="3" placeholder="选项1&#10;选项2&#10;选项3"></textarea>
+                </div>
+                <div class="modal-field-group">
+                    <label>插入模式</label>
+                    <div class="insert-mode-options">
+                        <label class="insert-mode-option selected" data-mode="insert">
+                            <input type="radio" name="insert-mode" value="insert" checked>
+                            <div style="font-size:12px;font-weight:600;">插入</div>
+                            <div style="font-size:10px;color:#64748b;">替换文本</div>
+                        </label>
+                        <label class="insert-mode-option" data-mode="paragraph">
+                            <input type="radio" name="insert-mode" value="paragraph">
+                            <div style="font-size:12px;font-weight:600;">段落</div>
+                            <div style="font-size:10px;color:#64748b;">包裹整段</div>
+                        </label>
+                        <label class="insert-mode-option" data-mode="both">
+                            <input type="radio" name="insert-mode" value="both">
+                            <div style="font-size:12px;font-weight:600;">两者</div>
+                            <div style="font-size:10px;color:#64748b;">双按钮</div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-cancel" id="modal-cancel">取消</button>
+                <button class="modal-confirm" id="modal-confirm">添加字段</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑字段弹窗 -->
+    <div class="modal-overlay" id="edit-field-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>编辑字段</h3>
+                <button class="modal-close" id="edit-modal-close">
+                    <i class="ms-Icon ms-Icon--Cancel" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-field-id">
+                <input type="hidden" id="edit-field-tag">
+                <div class="modal-field-group">
+                    <label>字段名称</label>
+                    <input type="text" id="edit-field-label" placeholder="字段名称">
+                </div>
+                <div class="modal-field-group">
+                    <label>字段类型</label>
+                    <select id="edit-field-type">
+                        <option value="text">文本</option>
+                        <option value="number">数字</option>
+                        <option value="date">日期</option>
+                        <option value="select">下拉选择</option>
+                        <option value="radio">单选按钮</option>
+                    </select>
+                </div>
+                <div class="modal-field-group" id="edit-options-group" style="display:none;">
+                    <label>选项（每行一个）</label>
+                    <textarea id="edit-field-options" rows="3" placeholder="选项1&#10;选项2&#10;选项3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-cancel" id="edit-modal-delete" style="background:#fef2f2;color:#ef4444;border-color:#fecaca;">
+                    <i class="ms-Icon ms-Icon--Delete" aria-hidden="true"></i> 删除
+                </button>
+                <button class="modal-cancel" id="edit-modal-cancel">取消</button>
+                <button class="modal-confirm" id="edit-modal-confirm">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加上时间戳参数，强制刷新缓存 -->
+    <script type="text/javascript" src="taskpane.js?v=20260108-unified"></script>
+</body>
+</html>

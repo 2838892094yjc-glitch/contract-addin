@@ -1,0 +1,19 @@
+{
+  "name": "contract-addin",
+  "version": "1.0.0",
+  "description": "",
+  "main": "taskpane.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "office-addin-debugging": "^6.0.6",
+    "office-addin-dev-certs": "^2.0.6",
+    "office-addin-manifest": "^2.1.2"
+  }
+}
