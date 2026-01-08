@@ -11,7 +11,7 @@
   <Version>1.0.0.1</Version>
   <ProviderName>ContractAssistant</ProviderName>
   <DefaultLocale>zh-CN</DefaultLocale>
-  <DisplayName DefaultValue="合同起草助手" />
+  <DisplayName DefaultValue="PEVC合同助手" />
   <Description DefaultValue="自动填充合同关键变量的 Word 插件" />
 
   <!-- 主机设置 -->

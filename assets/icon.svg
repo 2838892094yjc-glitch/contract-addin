@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e40af"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="128" height="128" rx="24" fill="url(#bg)"/>
+  <!-- Document icon -->
+  <path d="M40 24h32l20 20v60c0 4-3 7-7 7H40c-4 0-7-3-7-7V31c0-4 3-7 7-7z" fill="white" opacity="0.95"/>
+  <path d="M72 24v20h20" fill="none" stroke="white" stroke-width="2" opacity="0.7"/>
+  <!-- Lines representing text -->
+  <rect x="43" y="54" width="36" height="4" rx="2" fill="#3b82f6"/>
+  <rect x="43" y="64" width="42" height="4" rx="2" fill="#3b82f6"/>
+  <rect x="43" y="74" width="28" height="4" rx="2" fill="#3b82f6"/>
+  <rect x="43" y="84" width="38" height="4" rx="2" fill="#3b82f6"/>
+  <!-- Checkmark -->
+  <circle cx="95" cy="95" r="22" fill="#10b981"/>
+  <path d="M85 95l7 7 14-14" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+
