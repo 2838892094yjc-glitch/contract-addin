@@ -32,10 +32,11 @@ npm-debug.log*
 *.py
 *.pyc
 
-# Image files (except assets)
+# Image files (except assets folder)
 *.png
 *.jpg
 *.jpeg
+!assets/*.png
 
 # Word documents (sample files)
 *.docx
