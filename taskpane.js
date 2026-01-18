@@ -2947,6 +2947,548 @@ async function autoCreateContentControls() {
     return { success: successCount, skipped: skippedCount };
 }
 
+// ================================================================================
+// AI 智能识别变量模块
+// ================================================================================
+
+// 豆包 AI API 配置
+const DOUBAO_API = {
+    url: "https://ark.cn-beijing.volces.com/api/v3/responses",
+    token: "669c58ca-3cfd-4912-a30d-f9727cbc6485",
+    model: "doubao-seed-1-8-251228"
+};
+
+// AI 识别字段存储 Key
+const AI_FIELDS_KEY = "ai_recognized_fields";
+
+// 可用的分类 Section 列表
+const AI_SECTION_CATEGORIES = [
+    { id: "section_company_info", name: "公司基本信息", examples: "公司名称、注册资本、法定代表人、注册地址" },
+    { id: "section_financing", name: "本轮融资信息", examples: "投资金额、估值、股比、融资轮次" },
+    { id: "section_current_investors", name: "本轮投资人", examples: "投资人名称、投资额" },
+    { id: "section_existing_shareholders", name: "现有股东", examples: "股东名称、持股比例" },
+    { id: "section_board", name: "董事会/核心员工", examples: "董事姓名、创始人、高管" },
+    { id: "section_economics", name: "核心经济条款", examples: "分红比例、清算优先权" },
+    { id: "section_redemption", name: "回购权", examples: "回购价格、回购期限" },
+    { id: "section_definitions", name: "定义及签约方", examples: "控股股东、关联方定义" },
+    { id: "section_other", name: "其他", examples: "无法归类的变量" }
+];
+
+/**
+ * 调用豆包 AI 分析文档
+ * @param {string} documentText 文档文本内容
+ * @returns {Promise<Array>} 识别出的变量列表
+ */
+async function callDoubaoAI(documentText) {
+    console.log("[AI] 开始调用豆包 AI...");
+    console.log(`[AI] 文档长度: ${documentText.length} 字符`);
+    
+    const prompt = `你是合同分析专家。分析以下合同文本，识别出所有需要填写的变量/空白处。
+
+可用分类（必须使用这些 sectionId）：
+${AI_SECTION_CATEGORIES.map(s => `- ${s.id}: ${s.name}（${s.examples}）`).join('\n')}
+
+返回 JSON 数组，每项包含：
+- text: 变量原文（精确匹配文档中的文字，用于搜索定位）
+- label: 中文名称描述（用于表单显示）
+- sectionId: 归属分类ID（必须是上面列出的 id 之一）
+- type: 字段类型 (text/date/number)
+
+识别规则：
+1. 识别需要填写的内容：公司名称、人名、日期、金额、地址、证件号等
+2. 跳过已有【】包围的文字（这些已经是占位符）
+3. text 必须与文档原文完全一致，以便精确搜索
+4. 合理判断分类，无法归类的放入 section_other
+5. 不要识别固定的条款文字，只识别需要根据实际情况填写的变量
+
+合同文本：
+---
+${documentText.substring(0, 12000)}
+---
+
+只返回 JSON 数组，不要其他任何内容。示例格式：
+[{"text":"甲方公司","label":"甲方名称","sectionId":"section_company_info","type":"text"}]`;
+
+    try {
+        const response = await fetch(DOUBAO_API.url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${DOUBAO_API.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: DOUBAO_API.model,
+                input: [{ 
+                    role: "user", 
+                    content: [{ type: "input_text", text: prompt }] 
+                }]
+            })
+        });
+        
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`API 请求失败: ${response.status} - ${errText}`);
+        }
+        
+        const result = await response.json();
+        console.log("[AI] API 响应:", result);
+        
+        // 解析响应内容
+        let outputText = "";
+        if (result.output && result.output.content) {
+            outputText = result.output.content;
+        } else if (result.choices && result.choices[0] && result.choices[0].message) {
+            outputText = result.choices[0].message.content;
+        } else if (typeof result === 'string') {
+            outputText = result;
+        } else {
+            // 尝试查找 output 字段
+            outputText = JSON.stringify(result);
+        }
+        
+        console.log("[AI] 原始输出:", outputText);
+        
+        // 提取 JSON 数组
+        const jsonMatch = outputText.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) {
+            console.warn("[AI] 无法从响应中提取 JSON 数组");
+            return [];
+        }
+        
+        const variables = JSON.parse(jsonMatch[0]);
+        console.log(`[AI] 解析出 ${variables.length} 个变量:`, variables);
+        
+        // 验证和过滤
+        const validVariables = variables.filter(v => {
+            if (!v.text || !v.label || !v.sectionId) {
+                console.warn("[AI] 跳过无效变量:", v);
+                return false;
+            }
+            // 确保 sectionId 有效
+            const validSectionIds = AI_SECTION_CATEGORIES.map(s => s.id);
+            if (!validSectionIds.includes(v.sectionId)) {
+                v.sectionId = "section_other";
+            }
+            return true;
+        });
+        
+        return validVariables;
+        
+    } catch (error) {
+        console.error("[AI] 调用失败:", error);
+        throw error;
+    }
+}
+
+/**
+ * 将 AI 识别的字段存储到文档 Settings
+ */
+async function saveAIFieldsToDocument(fields) {
+    console.log(`[AI Storage] 保存 ${fields.length} 个 AI 字段到文档...`);
+    
+    await Word.run(async (context) => {
+        const settings = context.document.settings;
+        await saveToSettingsChunked(context, settings, AI_FIELDS_KEY, JSON.stringify(fields));
+        await context.sync();
+    });
+    
+    console.log("[AI Storage] 保存成功");
+}
+
+/**
+ * 从文档 Settings 加载 AI 识别的字段
+ */
+async function loadAIFieldsFromDocument() {
+    console.log("[AI Storage] 从文档加载 AI 字段...");
+    
+    try {
+        return await Word.run(async (context) => {
+            const settings = context.document.settings;
+            settings.load("items");
+            await context.sync();
+            
+            const data = await readFromSettingsChunked(context, settings, AI_FIELDS_KEY);
+            if (data) {
+                const fields = JSON.parse(data);
+                console.log(`[AI Storage] 加载了 ${fields.length} 个 AI 字段`);
+                return fields;
+            }
+            return [];
+        });
+    } catch (error) {
+        console.warn("[AI Storage] 加载失败:", error);
+        return [];
+    }
+}
+
+/**
+ * 在表单中渲染 AI 识别的字段
+ */
+function renderAIFieldsInForm(aiFields) {
+    console.log(`[AI Form] 渲染 ${aiFields.length} 个 AI 字段到表单...`);
+    
+    // 清除之前的 AI 字段（如果有）
+    document.querySelectorAll('.ai-field-wrapper').forEach(el => el.remove());
+    
+    if (aiFields.length === 0) return;
+    
+    // 按 sectionId 分组
+    const grouped = {};
+    aiFields.forEach(f => {
+        if (!grouped[f.sectionId]) grouped[f.sectionId] = [];
+        grouped[f.sectionId].push(f);
+    });
+    
+    // 为每个 section 添加 AI 字段
+    for (const [sectionId, fields] of Object.entries(grouped)) {
+        // 查找对应的 section 容器
+        const sectionHeader = document.querySelector(`[data-section-id="${sectionId}"]`);
+        let targetContainer = null;
+        
+        if (sectionHeader) {
+            // 找到 section 的字段容器
+            targetContainer = sectionHeader.closest('.form-section')?.querySelector('.section-fields');
+        }
+        
+        // 如果找不到特定 section，就放在表单容器末尾
+        if (!targetContainer) {
+            targetContainer = document.getElementById('dynamic-form-container');
+        }
+        
+        if (!targetContainer) continue;
+        
+        // 创建 AI 字段区域
+        const aiContainer = document.createElement('div');
+        aiContainer.className = 'ai-fields-section';
+        aiContainer.innerHTML = `
+            <div class="ai-section-header" style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 8px 0;
+                margin-top: 12px;
+                border-top: 1px dashed #6366f1;
+                color: #6366f1;
+                font-size: 12px;
+            ">
+                <i class="ms-Icon ms-Icon--Robot"></i>
+                <span>AI 识别的字段</span>
+            </div>
+        `;
+        
+        fields.forEach(field => {
+            const wrapper = createAIFieldElement(field);
+            aiContainer.appendChild(wrapper);
+        });
+        
+        targetContainer.appendChild(aiContainer);
+    }
+    
+    console.log("[AI Form] 渲染完成");
+}
+
+/**
+ * 创建单个 AI 字段的表单元素
+ */
+function createAIFieldElement(field) {
+    // 生成 tag（拼音驼峰）
+    const pinyinTag = pinyin(field.label, { toneType: 'none' })
+        .split(' ')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join('');
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'field-wrapper ai-field-wrapper';
+    wrapper.dataset.aiField = 'true';
+    wrapper.dataset.tag = pinyinTag;
+    wrapper.style.cssText = `
+        position: relative;
+        padding: 8px 12px;
+        margin: 6px 0;
+        background: rgba(99, 102, 241, 0.05);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        border-radius: 6px;
+    `;
+    
+    // AI 标签
+    const aiBadge = document.createElement('span');
+    aiBadge.className = 'ai-badge';
+    aiBadge.textContent = 'AI';
+    aiBadge.style.cssText = `
+        position: absolute;
+        top: -6px;
+        right: 8px;
+        background: #6366f1;
+        color: white;
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 3px;
+    `;
+    wrapper.appendChild(aiBadge);
+    
+    // 删除按钮
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'ai-field-delete';
+    deleteBtn.innerHTML = '<i class="ms-Icon ms-Icon--Cancel"></i>';
+    deleteBtn.style.cssText = `
+        position: absolute;
+        top: -6px;
+        left: 8px;
+        background: #ef4444;
+        color: white;
+        border: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    deleteBtn.title = '删除此字段';
+    deleteBtn.onclick = () => removeAIField(pinyinTag, wrapper);
+    wrapper.appendChild(deleteBtn);
+    
+    // Label
+    const label = document.createElement('label');
+    label.textContent = field.label;
+    label.style.cssText = `
+        display: block;
+        font-size: 12px;
+        color: #6366f1;
+        margin-bottom: 4px;
+        font-weight: 500;
+    `;
+    wrapper.appendChild(label);
+    
+    // Input
+    let input;
+    if (field.type === 'date') {
+        input = document.createElement('input');
+        input.type = 'date';
+    } else if (field.type === 'number') {
+        input = document.createElement('input');
+        input.type = 'number';
+    } else {
+        input = document.createElement('input');
+        input.type = 'text';
+    }
+    
+    input.id = `ai_${pinyinTag}`;
+    input.name = pinyinTag;
+    input.dataset.tag = pinyinTag;
+    input.placeholder = field.text || field.label;
+    input.style.cssText = `
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        border-radius: 4px;
+        font-size: 13px;
+        background: white;
+    `;
+    
+    // 输入时同步到文档
+    input.addEventListener('input', debounce(async () => {
+        await applyAIFieldToDocument(pinyinTag, input.value || `[${field.label}]`);
+    }, 500));
+    
+    wrapper.appendChild(input);
+    
+    return wrapper;
+}
+
+/**
+ * 将 AI 字段值同步到文档中的 Content Control
+ */
+async function applyAIFieldToDocument(tag, value) {
+    try {
+        await Word.run(async (context) => {
+            const contentControls = context.document.contentControls;
+            contentControls.load("items");
+            await context.sync();
+            
+            for (const cc of contentControls.items) {
+                cc.load("tag");
+            }
+            await context.sync();
+            
+            for (const cc of contentControls.items) {
+                if (cc.tag === tag) {
+                    await insertTextPreserveFormat(cc, value, context);
+                    console.log(`[AI Sync] 已更新 ${tag}: ${value}`);
+                }
+            }
+            await context.sync();
+        });
+    } catch (error) {
+        console.warn(`[AI Sync] 同步失败 (${tag}):`, error);
+    }
+}
+
+/**
+ * 删除 AI 识别的字段
+ */
+async function removeAIField(tag, wrapperElement) {
+    // 从 UI 移除
+    wrapperElement.remove();
+    
+    // 从存储中移除
+    try {
+        const fields = await loadAIFieldsFromDocument();
+        const updatedFields = fields.filter(f => {
+            const fTag = pinyin(f.label, { toneType: 'none' })
+                .split(' ')
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                .join('');
+            return fTag !== tag;
+        });
+        await saveAIFieldsToDocument(updatedFields);
+        console.log(`[AI] 已删除字段: ${tag}`);
+    } catch (error) {
+        console.warn(`[AI] 删除字段失败:`, error);
+    }
+}
+
+/**
+ * 读取当前文档的文本内容
+ */
+async function getDocumentText() {
+    return await Word.run(async (context) => {
+        const body = context.document.body;
+        body.load("text");
+        await context.sync();
+        return body.text;
+    });
+}
+
+/**
+ * AI 识别并埋点主流程
+ */
+async function aiRecognizeAndEmbed() {
+    console.log("[AI] ========== 开始 AI 智能识别 ==========");
+    
+    let successCount = 0;
+    let skippedCount = 0;
+    
+    try {
+        // Step 1: 读取文档文本
+        showNotification("正在读取文档...", "info");
+        const docText = await getDocumentText();
+        console.log(`[AI] 文档文本长度: ${docText.length}`);
+        
+        if (docText.length < 50) {
+            showNotification("文档内容太少，无法进行 AI 分析", "warning");
+            return;
+        }
+        
+        // Step 2: 调用 AI 分析
+        showNotification("AI 正在分析文档...(可能需要 10-30 秒)", "info", 30000);
+        const aiResult = await callDoubaoAI(docText);
+        
+        if (aiResult.length === 0) {
+            showNotification("AI 未识别到需要填写的变量", "info");
+            return;
+        }
+        
+        showNotification(`AI 识别到 ${aiResult.length} 个变量，正在埋点...`, "info");
+        
+        // Step 3: 在文档中创建 Content Control
+        await Word.run(async (context) => {
+            for (const variable of aiResult) {
+                try {
+                    // 搜索变量文本
+                    const searchResults = context.document.body.search(variable.text, { 
+                        matchCase: false,
+                        matchWholeWord: false 
+                    });
+                    searchResults.load("items");
+                    await context.sync();
+                    
+                    if (searchResults.items.length === 0) {
+                        console.log(`[AI] 未找到文本: "${variable.text}"`);
+                        skippedCount++;
+                        continue;
+                    }
+                    
+                    // 处理第一个匹配项
+                    const range = searchResults.items[0];
+                    range.load("text, parentContentControlOrNullObject");
+                    await context.sync();
+                    
+                    // 检查是否已有埋点
+                    const parentCC = range.parentContentControlOrNullObject;
+                    parentCC.load("isNullObject, tag");
+                    await context.sync();
+                    
+                    if (!parentCC.isNullObject) {
+                        console.log(`[AI] 跳过已埋点: "${variable.text}"`);
+                        skippedCount++;
+                        continue;
+                    }
+                    
+                    // 生成拼音 tag
+                    const pinyinTag = pinyin(variable.label, { toneType: 'none' })
+                        .split(' ')
+                        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join('');
+                    
+                    // 创建 Content Control
+                    const cc = range.insertContentControl("RichText");
+                    cc.tag = pinyinTag;
+                    cc.title = variable.label;
+                    cc.appearance = "BoundingBox";
+                    cc.color = "#6366f1"; // 紫色，区分 AI 识别
+                    
+                    await context.sync();
+                    successCount++;
+                    console.log(`[AI] ✓ 埋点成功: ${variable.label} → ${pinyinTag}`);
+                    
+                } catch (err) {
+                    console.warn(`[AI] 处理变量失败 (${variable.text}):`, err.message);
+                    skippedCount++;
+                }
+            }
+            
+            await context.sync();
+        });
+        
+        // Step 4: 存储字段配置到文档
+        await saveAIFieldsToDocument(aiResult);
+        
+        // Step 5: 更新表单 UI
+        renderAIFieldsInForm(aiResult);
+        
+        // 完成通知
+        const message = `AI 识别完成！\n成功埋点: ${successCount} 个\n跳过: ${skippedCount} 个`;
+        showNotification(message, successCount > 0 ? "success" : "info", 5000);
+        console.log(`[AI] ========== 完成: 成功 ${successCount}, 跳过 ${skippedCount} ==========`);
+        
+    } catch (error) {
+        console.error("[AI] 识别失败:", error);
+        showNotification(`AI 识别失败: ${error.message || error}`, "error");
+    }
+}
+
+/**
+ * 确认对话框：AI 智能识别
+ */
+async function confirmAIRecognize() {
+    const confirmed = await showConfirmDialog(
+        "AI 智能识别变量",
+        "将使用 AI 分析当前文档，自动识别并埋点所有变量。\n\n建议先执行【占位符】埋点，再执行此操作。\n\n此操作需要联网，可能需要 10-30 秒。\n\n确定继续吗？"
+    );
+    
+    if (confirmed) {
+        showNotification("正在启动 AI 分析...", "info");
+        await aiRecognizeAndEmbed();
+    }
+}
+
+// 暴露到全局
+window.confirmAIRecognize = confirmAIRecognize;
+window.aiRecognizeAndEmbed = aiRecognizeAndEmbed;
+
 // ---------------- 插入 Content Control ----------------
 async function insertControl(tag, title, isWrapper = false, specificRoundId = null) {
     console.log(`[InsertControl] 开始插入: tag=${tag}, title=${title}, isWrapper=${isWrapper}, roundId=${specificRoundId}`);
@@ -4475,7 +5017,18 @@ if (typeof Office !== 'undefined') {
         // 3. 数据准备好后再构建表单
         buildForm();
         
-        // 4. 绑定紧急工具按钮
+        // 4. 【新增】加载 AI 识别的字段并渲染到表单
+        try {
+            const aiFields = await loadAIFieldsFromDocument();
+            if (aiFields && aiFields.length > 0) {
+                console.log(`[Init] 从文档加载了 ${aiFields.length} 个 AI 字段`);
+                renderAIFieldsInForm(aiFields);
+            }
+        } catch (e) {
+            console.warn("[Init] 加载 AI 字段失败:", e);
+        }
+        
+        // 5. 绑定紧急工具按钮
         bindEmergencyTools();
     });
 } else {
@@ -4483,6 +5036,7 @@ if (typeof Office !== 'undefined') {
     document.addEventListener("DOMContentLoaded", async () => {
         await loadFormConfig();
         buildForm();
+        // 浏览器预览模式下不加载 AI 字段（需要 Word API）
         bindEmergencyTools();
     });
 }
