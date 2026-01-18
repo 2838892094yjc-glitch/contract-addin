@@ -1292,6 +1292,9 @@
                     <button id="btn-apply-form" class="btn-primary-sm" style="width:100%;background:var(--success-color);" onclick="applyFormToCurrentDocument()">
                         <i class="ms-Icon ms-Icon--Download"></i> 应用到文档
                     </button>
+                    <button id="btn-auto-embed" class="btn-primary-sm" style="width:100%;background:var(--accent-color);margin-top:8px;" onclick="confirmAutoEmbed()">
+                        <i class="ms-Icon ms-Icon--Tag"></i> 自动埋点【占位符】
+                    </button>
                 </div>
         </div>
 
@@ -1522,6 +1525,6 @@
     </div>
 
     <!-- 加上时间戳参数，强制刷新缓存 -->
-    <script type="text/javascript" src="taskpane.js?v=20260109-fix"></script>
+    <script type="text/javascript" src="taskpane.js?v=20260118-autoembed"></script>
 </body>
 </html>

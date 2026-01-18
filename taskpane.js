@@ -2818,6 +2818,121 @@ function formatChineseNumber(numStr) {
     return `${chinese}（${num}）`;
 }
 
+// ---------------- 自动埋点：扫描【占位符】并创建 Content Control ----------------
+
+/**
+ * 确认并执行自动埋点
+ */
+async function confirmAutoEmbed() {
+    const confirmed = await showConfirmDialog(
+        "此操作将扫描文档中所有【占位符】格式的文本，并将其转换为可填充的埋点。\n\n已经是埋点的内容会自动跳过。",
+        {
+            title: "自动埋点确认",
+            confirmText: "开始埋点",
+            cancelText: "取消"
+        }
+    );
+    
+    if (confirmed) {
+        showNotification("正在扫描文档...", "info");
+        await autoCreateContentControls();
+    }
+}
+
+/**
+ * 自动扫描文档中的【xxx】格式占位符，将其转换为 Content Control
+ * @returns {Promise<{success: number, skipped: number}>} 成功和跳过的数量
+ */
+async function autoCreateContentControls() {
+    console.log("[AutoEmbed] 开始自动埋点...");
+    
+    if (typeof Word === 'undefined') {
+        showNotification("Word API 不可用", "error");
+        return { success: 0, skipped: 0 };
+    }
+    
+    let successCount = 0;
+    let skippedCount = 0;
+    
+    try {
+        await Word.run(async (context) => {
+            const body = context.document.body;
+            
+            // 搜索所有【xxx】格式的文本（使用通配符）
+            // Word 的通配符语法：【*】 匹配【开头，任意字符，】结尾
+            const searchResults = body.search("【*】", { matchWildcards: true });
+            searchResults.load("items");
+            await context.sync();
+            
+            console.log(`[AutoEmbed] 找到 ${searchResults.items.length} 个匹配项`);
+            
+            if (searchResults.items.length === 0) {
+                showNotification("未找到任何【占位符】格式的文本", "info");
+                return;
+            }
+            
+            // 遍历每个匹配项
+            for (let i = 0; i < searchResults.items.length; i++) {
+                const range = searchResults.items[i];
+                range.load("text, parentContentControlOrNullObject");
+                await context.sync();
+                
+                // 检查是否已经在 Content Control 内（避免重复埋点）
+                const parentCC = range.parentContentControlOrNullObject;
+                parentCC.load("isNullObject, tag");
+                await context.sync();
+                
+                if (!parentCC.isNullObject) {
+                    // 已经是 Content Control，跳过
+                    console.log(`[AutoEmbed] 跳过已埋点的: ${range.text}`);
+                    skippedCount++;
+                    continue;
+                }
+                
+                // 提取占位符名称（去掉【】）
+                const fullText = range.text;
+                const name = fullText.replace(/^【/, "").replace(/】$/, "").trim();
+                
+                if (!name) {
+                    console.log(`[AutoEmbed] 跳过空占位符: ${fullText}`);
+                    skippedCount++;
+                    continue;
+                }
+                
+                // 创建 Content Control
+                try {
+                    const cc = range.insertContentControl("RichText");
+                    cc.tag = name;  // tag 就是占位符名称
+                    cc.title = name; // title 也是占位符名称
+                    cc.appearance = "BoundingBox";
+                    cc.color = "blue";
+                    cc.cannotEdit = false;
+                    cc.cannotDelete = false;
+                    
+                    await context.sync();
+                    successCount++;
+                    console.log(`[AutoEmbed] ✓ 成功埋点: ${name}`);
+                } catch (err) {
+                    console.warn(`[AutoEmbed] 埋点失败 (${name}):`, err.message);
+                    skippedCount++;
+                }
+            }
+            
+            await context.sync();
+        });
+        
+        const message = `自动埋点完成！\n成功: ${successCount} 个\n跳过: ${skippedCount} 个`;
+        showNotification(message, successCount > 0 ? "success" : "info", 5000);
+        console.log(`[AutoEmbed] 完成: 成功 ${successCount}, 跳过 ${skippedCount}`);
+        
+    } catch (error) {
+        console.error("[AutoEmbed] 自动埋点失败:", error);
+        showNotification(`自动埋点失败: ${error.message}`, "error");
+    }
+    
+    return { success: successCount, skipped: skippedCount };
+}
+
 // ---------------- 插入 Content Control ----------------
 async function insertControl(tag, title, isWrapper = false, specificRoundId = null) {
     console.log(`[InsertControl] 开始插入: tag=${tag}, title=${title}, isWrapper=${isWrapper}, roundId=${specificRoundId}`);
