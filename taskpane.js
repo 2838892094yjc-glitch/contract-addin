@@ -12,7 +12,7 @@
 // 配置存储 Key
 const FORM_CONFIG_KEY = "contract_addin:formConfig";
 const FORM_CONFIG_VERSION_KEY = "contract_addin:formConfigVersion";
-const CURRENT_CONFIG_VERSION = "v20260108b"; // 配置版本号，更新时修改
+const CURRENT_CONFIG_VERSION = "v20260108e"; // 配置版本号，更新时修改
 
 // 表单配置数组（动态加载）
 let contractConfig = [];
@@ -285,7 +285,7 @@ const DEFAULT_CONTRACT_CONFIG = [
             
             // --- 投资人转股权 (新增) ---
             { id: "investorTransferRight", label: "投资人是否可自由转股", tag: "InvestorTransferRight", type: "radio", options: ["是", "否"], value: "是" },
-
+            
             // --- 优先认购权 ---
             { id: "hasPreemptiveRight", label: "新股优先认购权", tag: "HasPreemptiveRight", type: "radio", options: ["是", "否"] },
             { id: "preemptiveHolder", label: "优先认购权人", tag: "PreemptiveHolder", type: "text", value: "本轮投资方" },
@@ -372,7 +372,7 @@ C为按反稀释权人持股比例计算的公司新融资中实际增加或发�
             },
             { id: "antiDilutionCompDays", label: "补偿期限(天)", tag: "AntiDilutionCompDays", type: "number", value: "30", formatFn: "chineseNumber" },
             { id: "preemptiveClauseRef", label: "优先认购权条款编号", tag: "PreemptiveClauseRef", type: "text", placeholder: "例如：第5.1条" },
-            
+
             // --- 优先清算权 ---
             { id: "liquidationPref", label: "清算优先权", tag: "HasLiquidationPref", type: "radio", options: ["是", "否"] },
             { id: "liqRanking", label: "是否优于普通股", tag: "LiqRanking", type: "radio", options: ["是", "否"] },
@@ -1391,24 +1391,38 @@ function buildForm() {
     if (!container) return;
     container.innerHTML = "";
 
-    // 注入美化样式 (圆弧化 + 双列布局)
+    // 注入美化样式 (Modern LegalTech Style)
     const style = document.createElement("style");
     style.textContent = `
         .section-header-container { 
-            margin-top: 8px; 
-            margin-bottom: 18px; 
-            padding: 18px 22px; 
-            background: linear-gradient(135deg, #f8fafc 0%, #fff 100%);
-            border-radius: 16px;
-            border-left: 5px solid #2563eb;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            margin-top: 24px; 
+            margin-bottom: 20px; 
+            padding: 0 8px; 
+            background: transparent;
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
         .section-header-static { 
-            font-size: 17px; 
+            font-size: 18px; 
             font-weight: 700; 
-            color: #1e293b; 
+            color: var(--primary-color); 
             margin: 0;
-            letter-spacing: 0.3px;
+            letter-spacing: -0.02em;
+            position: relative;
+        }
+        .section-header-static::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 18px;
+            background: var(--accent-color);
+            margin-right: 12px;
+            border-radius: 4px;
+            vertical-align: middle;
         }
         
         /* 双列布局 */
@@ -1416,7 +1430,7 @@ function buildForm() {
             padding-left: 0; 
             display: grid; 
             grid-template-columns: repeat(2, 1fr); 
-            gap: 16px;
+            gap: 20px;
         }
         .section-fields .divider-line,
         .section-fields .form-group.full-width { 
@@ -1426,21 +1440,125 @@ function buildForm() {
             .section-fields { grid-template-columns: 1fr; }
         }
         
-        /* 表单卡片圆弧化 */
+        /* 表单卡片 - 极简白底，去边框 */
         .form-group { 
-            background: #fff; 
-            padding: 16px 18px; 
-            border-radius: 14px; 
-            border: 1px solid #e2e8f0; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.03); 
+            background: var(--card-bg); 
+            padding: 32px; 
+            border-radius: var(--radius-lg); 
+            border: none; 
+            box-shadow: var(--shadow-sm); 
             width: 100% !important;
             box-sizing: border-box !important;
             display: block !important;
-            transition: all 0.2s ease;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
         }
         .form-group:hover {
-            border-color: #cbd5e1;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+        
+        /* Label 美化 */
+        .label-row label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        /* 输入框美化 */
+        input[type="text"], input[type="number"], input[type="date"], select, textarea {
+            background: var(--input-bg);
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            font-size: 14px;
+            color: var(--text-main);
+            transition: all 0.2s ease;
+            width: 100%;
+            outline: none;
+        }
+        input:focus, select:focus, textarea:focus {
+            background: #fff;
+            box-shadow: 0 0 0 2px var(--accent-color);
+        }
+        /* 字段编辑按钮 */
+        .form-group .field-edit-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #64748b;
+            z-index: 10;
+        }
+        .form-group:hover .field-edit-btn {
+            opacity: 1;
+        }
+        .form-group .field-edit-btn:hover {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+        /* 拖拽状态 */
+        .form-group[draggable="true"] {
+            cursor: grab;
+            position: relative;
+        }
+        .form-group[draggable="true"]:active {
+            cursor: grabbing;
+        }
+        /* 拖拽把手区域（左侧） */
+        .form-group[draggable="true"]::before {
+            content: "⋮⋮";
+            position: absolute;
+            left: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            color: #cbd5e1;
+            cursor: grab;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .form-group[draggable="true"]:hover::before {
+            opacity: 1;
+        }
+        .form-group.dragging {
+            opacity: 0.5;
+            border: 2px dashed #2563eb;
+        }
+        /* 整个字段可拖拽（通过事件处理）*/
+        .form-group[draggable="true"] .label-row {
+            cursor: grab;
+        }
+        /* 放置区样式 */
+        .drop-zone {
+            height: 8px;
+            margin: 4px 0;
+            border-radius: 4px;
+            background: transparent;
+            transition: all 0.2s ease;
+            display: none;
+        }
+        .drop-zone.drag-over {
+            height: 40px;
+            background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+            border: 2px dashed #2563eb;
+        }
+        body.dragging-field .drop-zone {
+            display: block;
         }
         
         .label-row { 
@@ -1634,8 +1752,8 @@ function buildForm() {
     }
 
     // 递归创建字段
-    function createFields(fields, parent) {
-        fields.forEach(field => {
+    function createFields(fields, parent, sectionId) {
+        fields.forEach((field, fieldIndex) => {
             // 分割线特殊处理
             if (field.type === "divider") {
                 const div = document.createElement("div");
@@ -1659,6 +1777,28 @@ function buildForm() {
 
             const wrapper = document.createElement("div");
             wrapper.className = "form-group";
+            wrapper.id = `form-group-${sectionId}-${field.id || fieldIndex}`;
+            
+            // 【新增】添加拖拽支持
+            wrapper.draggable = true;
+            wrapper.dataset.sectionId = sectionId;
+            wrapper.dataset.fieldId = field.id;
+            wrapper.dataset.fieldIndex = fieldIndex;
+            
+            // 【新增】编辑按钮（hover 时显示）
+            const editBtn = document.createElement("button");
+            editBtn.className = "field-edit-btn";
+            editBtn.innerHTML = "⚙️";
+            editBtn.title = "编辑此字段";
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                editFieldInSection(sectionId, field.id || fieldIndex);
+            };
+            wrapper.appendChild(editBtn);
+            
+            // 【新增】拖拽事件
+            wrapper.addEventListener("dragstart", handleFieldDragStart);
+            wrapper.addEventListener("dragend", handleFieldDragEnd);
             
             // Label Row
             const labelRow = document.createElement("div");
@@ -1806,7 +1946,7 @@ function buildForm() {
                 const subContainer = document.createElement("div");
                 subContainer.className = "sub-fields-container";
                 subContainer.style.display = "none"; // 默认隐藏
-                createFields(field.subFields, subContainer);
+                createFields(field.subFields, subContainer, sectionId);
                 wrapper.appendChild(subContainer);
             }
 
@@ -1831,7 +1971,7 @@ function buildForm() {
             sectionInsertBtn.title = `将选中的整个"${section.header.label}"段落包裹为可显示/隐藏的区块`;
             sectionInsertBtn.style.marginLeft = "10px";
             sectionInsertBtn.onclick = (e) => {
-                e.preventDefault();
+                    e.preventDefault();
                 insertControl(section.header.tag, section.header.label, true);
             };
             headerDiv.appendChild(sectionInsertBtn);
@@ -1932,16 +2072,16 @@ function buildForm() {
                             insertControl(paraTag, `${field.label}段落`, true);
                         };
                         labelRow.appendChild(insertParaBtn);
-                        
-                        const insertBtn = document.createElement("button");
-                        insertBtn.className = "insert-btn";
-                        insertBtn.textContent = "插入";
+                    
+                    const insertBtn = document.createElement("button");
+                    insertBtn.className = "insert-btn";
+                    insertBtn.textContent = "插入";
                         insertBtn.title = `在光标处插入 [${field.label}]`;
-                        insertBtn.onclick = (e) => {
-                            e.preventDefault();
+                    insertBtn.onclick = (e) => {
+                        e.preventDefault();
                             insertControl(field.tag, field.label, false);
-                        };
-                        labelRow.appendChild(insertBtn);
+                    };
+                    labelRow.appendChild(insertBtn);
                     } else {
                         const insertBtn = document.createElement("button");
                         insertBtn.className = "insert-btn";
@@ -1987,7 +2127,7 @@ function buildForm() {
                                     const showWhen = JSON.parse(cf.dataset.showWhen || "[]");
                                     const shouldShow = showWhen.includes(selectedValue);
                                     cf.style.display = shouldShow ? "block" : "none";
-                                    
+                                
                                     const paraTag = cf.dataset.paraTag;
                                     if (paraTag) {
                                         toggleRoundVisibility(paraTag, shouldShow);
@@ -2163,14 +2303,14 @@ function buildForm() {
                         };
                         labelRow.appendChild(insertBtn);
                     } else {
-                        const insertBtn = document.createElement("button");
-                        insertBtn.className = "insert-btn";
-                        insertBtn.textContent = "插入";
-                        insertBtn.onclick = (e) => {
-                            e.preventDefault();
-                            insertControl(field.tag, field.label);
-                        };
-                        labelRow.appendChild(insertBtn);
+                    const insertBtn = document.createElement("button");
+                    insertBtn.className = "insert-btn";
+                    insertBtn.textContent = "插入";
+                    insertBtn.onclick = (e) => {
+                        e.preventDefault();
+                        insertControl(field.tag, field.label);
+                    };
+                    labelRow.appendChild(insertBtn);
                     }
                     
                     wrapper.appendChild(labelRow);
@@ -2301,7 +2441,8 @@ function buildForm() {
             // 普通 section
             const fieldsDiv = document.createElement("div");
             fieldsDiv.className = "section-fields";
-            createFields(section.fields, fieldsDiv);
+            fieldsDiv.dataset.sectionId = section.id;
+            createFields(section.fields, fieldsDiv, section.id);
             container.appendChild(fieldsDiv);
         }
     });
@@ -2314,9 +2455,6 @@ function buildForm() {
     
     // ========== 初始化股东总数 ==========
     updateShareholderCount();
-    
-    // ========== 初始化分页逻辑 ==========
-    initPagination();
 }
 
 // ---------------- 渲染进度侧边栏 (Step Timeline) ----------------
@@ -2563,7 +2701,7 @@ async function insertTextPreserveFormat(ctrl, text, context) {
         console.warn(`[InsertTextPreserveFormat] 获取格式失败:`, err.message);
     }
 
-    // 插入新文本
+        // 插入新文本
     try {
         ctrl.insertText(text, "Replace");
         await context.sync();
@@ -2580,7 +2718,7 @@ async function insertTextPreserveFormat(ctrl, text, context) {
             if (isMultiLine) {
                 const paragraphs = ctrl.paragraphs;
                 paragraphs.load("items");
-                await context.sync();
+        await context.sync();
                 
                 for (const para of paragraphs.items) {
                     const paraRange = para.getRange();
@@ -2601,7 +2739,7 @@ async function insertTextPreserveFormat(ctrl, text, context) {
                         paraRange.font.italic = savedFont.italic;
                     }
                 }
-                await context.sync();
+        await context.sync();
                 console.log(`[InsertTextPreserveFormat] 多行格式已恢复 (${paragraphs.items.length} 段)`);
             } else {
                 // 单行文本，直接设置整个范围
@@ -3262,9 +3400,8 @@ async function autoToggleLegalRepParagraph(paraTag, shouldShow) {
                 return;
             }
             
-            // 检查当前状态
-            const HIDDEN_PLACEHOLDER = "[▶已隐藏]";
-            const currentlyHidden = target.text.trim() === HIDDEN_PLACEHOLDER;
+            // 检查当前状态（占位符格式为 [▶xxx]）
+            const currentlyHidden = /^\[▶.+\]$/.test((target.text || "").trim());
             
             // 判断是否需要操作
             if (shouldShow && !currentlyHidden) {
@@ -3308,7 +3445,7 @@ async function toggleRoundVisibility(tag, isVisible) {
                     
                     // ========== 阶段 1：获取目标控件 ==========
                     const targets = context.document.contentControls.getByTag(tag);
-                    targets.load("items,text");
+                    targets.load("items,text,title");
                     await context.sync(); // 【同步 1：只读】
                     
                     if (targets.items.length === 0) {
@@ -3316,9 +3453,9 @@ async function toggleRoundVisibility(tag, isVisible) {
                         return;
                     }
                     const ctrl = targets.items[0];
-                    // 判断是否有实际内容（排除占位符）
-                    const HIDDEN_PLACEHOLDER = "[▶已隐藏]";
-                    const hasContent = ctrl.text && ctrl.text.trim().length > 0 && ctrl.text.trim() !== HIDDEN_PLACEHOLDER;
+                    // 判断是否有实际内容（排除占位符 [▶xxx] 格式）
+                    const isHiddenPlaceholder = /^\[▶.+\]$/.test((ctrl.text || "").trim());
+                    const hasContent = ctrl.text && ctrl.text.trim().length > 0 && !isHiddenPlaceholder;
 
                     if (isVisible) {
                         // ========== 恢复逻辑 (使用最小 OOXML 包重建) ==========
@@ -3390,9 +3527,10 @@ async function toggleRoundVisibility(tag, isVisible) {
                         console.log(`✅ [Toggle] Saved OOXML for ${tag} in ${chunkCount} chunks`);
 
                         console.log(`[Toggle] [Step 3] Clearing content...`);
-                        // 【关键】使用可见占位符，让用户知道这里有隐藏内容，不要删除
+                        // 【关键】使用可见占位符显示具体名称，让用户知道这里隐藏的是什么
                         // 【保留格式】
-                        await insertTextPreserveFormat(ctrl, "[▶已隐藏]", context);
+                        const displayName = ctrl.title || tag;
+                        await insertTextPreserveFormat(ctrl, `[▶${displayName}]`, context);
                         // 【同步：删正文】
                     }
                     
@@ -4076,7 +4214,7 @@ async function batchAlignRoundVisibility(targetEnabledRounds, targetEnabledInves
             await Word.run(async (context) => {
                 const settings = context.document.settings;
                 const allControls = context.document.contentControls;
-                allControls.load("items,tag,text");
+                allControls.load("items,tag,text,title");
                 await context.sync(); // 【同步 1: 加载控件】
 
                 // ========== 阶段 1：分析需要的操作 ==========
@@ -4095,15 +4233,15 @@ async function batchAlignRoundVisibility(targetEnabledRounds, targetEnabledInves
                     if (targets.length === 0) continue;
                     
                     const ctrl = targets[0];
-                    // 判断是否有实际内容（排除占位符）
-                    const HIDDEN_PLACEHOLDER = "[▶已隐藏]";
-                    const hasContent = ctrl.text && ctrl.text.trim().length > 0 && ctrl.text.trim() !== HIDDEN_PLACEHOLDER;
+                    // 判断是否有实际内容（排除占位符 [▶xxx] 格式）
+                    const isHiddenPlaceholder = /^\[▶.+\]$/.test((ctrl.text || "").trim());
+                    const hasContent = ctrl.text && ctrl.text.trim().length > 0 && !isHiddenPlaceholder;
                     const settingKey = `${BACKUP_PREFIX}${roundInfo.tag}`;
                     
                     if (shouldBeVisible && !hasContent) {
                         restoreOps.push({ ctrl, settingKey, tag: roundInfo.tag });
                     } else if (!shouldBeVisible && hasContent) {
-                        hideOps.push({ ctrl, settingKey, tag: roundInfo.tag });
+                        hideOps.push({ ctrl, settingKey, tag: roundInfo.tag, title: ctrl.title });
                     }
                 }
                 
@@ -4168,9 +4306,10 @@ async function batchAlignRoundVisibility(targetEnabledRounds, targetEnabledInves
                     const chunkCount = await saveToSettingsChunked(context, settings, op.settingKey, slimmedOoxml);
                     console.log(`✅ [BatchAlign] Saved OOXML for ${op.tag} in ${chunkCount} chunks`);
                     
-                    // 使用可见占位符，让用户知道这里有隐藏内容，不要删除
+                    // 使用可见占位符显示具体名称，让用户知道这里隐藏的是什么
                     // 【保留格式】
-                    await insertTextPreserveFormat(op.ctrl, "[▶已隐藏]", context);
+                    const displayName = op.title || op.tag;
+                    await insertTextPreserveFormat(op.ctrl, `[▶${displayName}]`, context);
                     
                     console.log(`✅ [BatchAlign] Hidden ${op.tag}`);
                 }
@@ -4632,6 +4771,184 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/* ==================================================================
+ * 未填写字段检查系统
+ * ================================================================== */
+
+// 当前未填写字段列表
+let unfilledFields = [];
+let currentUnfilledIndex = 0;
+
+/**
+ * 检查所有未填写的字段
+ * 返回未填写字段列表 [{id, label, sectionLabel, element}]
+ */
+function checkUnfilledFields() {
+    const unfilled = [];
+    
+    contractConfig.forEach(section => {
+        if (!section.fields) return;
+        
+        const sectionLabel = section.header?.label || section.id;
+        
+        section.fields.forEach((field, idx) => {
+            // 查找表单中的输入元素
+            const inputId = `input-${field.tag}`;
+            const input = document.getElementById(inputId);
+            
+            if (!input) return;
+            
+            let isEmpty = false;
+            const value = input.value?.trim() || "";
+            
+            // 检查是否为空或占位符
+            if (input.tagName === "SELECT") {
+                isEmpty = !value || value === "";
+            } else if (input.tagName === "INPUT" || input.tagName === "TEXTAREA") {
+                // 空值或占位符格式 [xxx]
+                isEmpty = !value || /^\[.+\]$/.test(value);
+            }
+            
+            if (isEmpty) {
+                unfilled.push({
+                    id: field.id || `${section.id}-${idx}`,
+                    tag: field.tag,
+                    label: field.label,
+                    sectionId: section.id,
+                    sectionLabel: sectionLabel,
+                    element: input
+                });
+            }
+        });
+    });
+    
+    console.log(`[UnfilledCheck] 发现 ${unfilled.length} 个未填写字段`);
+    return unfilled;
+}
+
+/**
+ * 显示未填写字段导航条
+ */
+function showUnfilledFieldsBar(fields) {
+    unfilledFields = fields;
+    currentUnfilledIndex = 0;
+    
+    // 创建或获取导航条
+    let bar = document.getElementById("unfilled-fields-bar");
+    if (!bar) {
+        bar = document.createElement("div");
+        bar.id = "unfilled-fields-bar";
+        bar.className = "unfilled-fields-bar";
+        document.body.appendChild(bar);
+    }
+    
+    bar.innerHTML = `
+        <div class="unfilled-bar-content">
+            <div class="unfilled-bar-icon">⚠️</div>
+            <div class="unfilled-bar-info">
+                <span class="unfilled-bar-title">发现 <strong>${fields.length}</strong> 个未填写字段</span>
+                <span class="unfilled-bar-current" id="unfilled-current-label"></span>
+            </div>
+            <div class="unfilled-bar-nav">
+                <button class="unfilled-nav-btn" id="unfilled-prev" title="上一个">◄</button>
+                <span class="unfilled-nav-counter" id="unfilled-counter">1/${fields.length}</span>
+                <button class="unfilled-nav-btn" id="unfilled-next" title="下一个">►</button>
+            </div>
+            <button class="unfilled-bar-done" id="unfilled-done">检查完毕</button>
+            <button class="unfilled-bar-close" id="unfilled-close">×</button>
+        </div>
+    `;
+    
+    bar.classList.add("show");
+    document.body.classList.add("has-unfilled-bar");
+    
+    // 跳转到第一个未填写字段
+    jumpToUnfilledField(0);
+    
+    // 绑定事件
+    document.getElementById("unfilled-prev").onclick = () => navigateUnfilledField(-1);
+    document.getElementById("unfilled-next").onclick = () => navigateUnfilledField(1);
+    
+    // "检查完毕"按钮返回 Promise
+    return new Promise((resolve) => {
+        document.getElementById("unfilled-done").onclick = () => {
+            hideUnfilledFieldsBar();
+            resolve(true);
+        };
+        // 关闭按钮也返回 true（允许继续）
+        document.getElementById("unfilled-close").onclick = () => {
+            hideUnfilledFieldsBar();
+            resolve(false); // 取消操作
+        };
+    });
+}
+
+/**
+ * 隐藏未填写字段导航条
+ */
+function hideUnfilledFieldsBar() {
+    const bar = document.getElementById("unfilled-fields-bar");
+    if (bar) {
+        bar.classList.remove("show");
+    }
+    document.body.classList.remove("has-unfilled-bar");
+    // 移除所有高亮
+    document.querySelectorAll(".unfilled-highlight").forEach(el => {
+        el.classList.remove("unfilled-highlight");
+    });
+    unfilledFields = [];
+    currentUnfilledIndex = 0;
+}
+
+/**
+ * 导航到上一个/下一个未填写字段
+ */
+function navigateUnfilledField(direction) {
+    if (unfilledFields.length === 0) return;
+    
+    // 移除当前高亮
+    const currentField = unfilledFields[currentUnfilledIndex];
+    if (currentField?.element) {
+        currentField.element.closest(".form-group")?.classList.remove("unfilled-highlight");
+    }
+    
+    // 计算新索引
+    currentUnfilledIndex += direction;
+    if (currentUnfilledIndex < 0) currentUnfilledIndex = unfilledFields.length - 1;
+    if (currentUnfilledIndex >= unfilledFields.length) currentUnfilledIndex = 0;
+    
+    // 跳转到新字段
+    jumpToUnfilledField(currentUnfilledIndex);
+}
+
+/**
+ * 跳转到指定未填写字段
+ */
+function jumpToUnfilledField(index) {
+    if (index < 0 || index >= unfilledFields.length) return;
+    
+    const field = unfilledFields[index];
+    const element = field.element;
+    const formGroup = element?.closest(".form-group");
+    
+    if (!element || !formGroup) return;
+    
+    // 更新计数器
+    document.getElementById("unfilled-counter").textContent = `${index + 1}/${unfilledFields.length}`;
+    document.getElementById("unfilled-current-label").textContent = `${field.sectionLabel} → ${field.label}`;
+    
+    // 滚动到字段位置
+    formGroup.scrollIntoView({ behavior: "smooth", block: "center" });
+    
+    // 添加高亮 + 抖动效果
+    formGroup.classList.add("unfilled-highlight");
+    
+    // 聚焦到输入框
+    setTimeout(() => {
+        element.focus();
+    }, 300);
+}
+
 const HIDDEN_PLACEHOLDER_TEXT = "[▶已隐藏]";
 
 /**
@@ -4654,7 +4971,30 @@ async function finalizeContract(options = {}) {
     };
     
     try {
-        updateStatus("正在准备...");
+        updateStatus("正在检查表单...");
+        
+        // Step 0: 检查未填写字段
+        const unfilled = checkUnfilledFields();
+        if (unfilled.length > 0) {
+            updateStatus(`⚠️ 发现 ${unfilled.length} 个未填写字段，请检查`, "orange");
+            
+            // 显示导航条，等待用户确认
+            const userConfirmed = await showUnfilledFieldsBar(unfilled);
+            
+            if (!userConfirmed) {
+                updateStatus("❌ 用户取消操作", "red");
+                showNotification("操作已取消。请填写表单后重试。", "warning");
+                return;
+            }
+            
+            updateStatus("✅ 用户确认已检查未填写字段");
+            await delay(300);
+        } else {
+            updateStatus("✅ 表单检查通过");
+            await delay(200);
+        }
+        
+        updateStatus("正在准备备份...");
         
         // Step 1: 尝试备份（如果已登录）
         const backupResult = await tryBackupCurrentDocument();
@@ -5149,7 +5489,7 @@ async function tryBackupCurrentDocument() {
 }
 
 /**
- * 删除文档中所有的 [▶已隐藏] 占位符
+ * 删除文档中所有的 [▶xxx] 格式占位符
  */
 async function deleteAllHiddenPlaceholders() {
     return wordActionQueue.add(async () => {
@@ -5158,18 +5498,18 @@ async function deleteAllHiddenPlaceholders() {
         await Word.run(async (context) => {
             const body = context.document.body;
             
-            // 搜索所有 [▶已隐藏] 文本
-            const searchResults = body.search(HIDDEN_PLACEHOLDER_TEXT, {
+            // 搜索所有 [▶ 开头的文本（占位符格式为 [▶xxx]）
+            const searchResults = body.search("[▶", {
                 matchCase: true,
                 matchWildcards: false
             });
             
-            context.load(searchResults, "items");
+            context.load(searchResults, "items,text");
             await context.sync();
             
-            console.log(`[Finalize] 找到 ${searchResults.items.length} 个隐藏标记`);
+            console.log(`[Finalize] 找到 ${searchResults.items.length} 个潜在隐藏标记`);
             
-            // 从后向前删除，避免索引问题
+            // 从后向前处理，避免索引问题
             for (let i = searchResults.items.length - 1; i >= 0; i--) {
                 const range = searchResults.items[i];
                 
@@ -5178,17 +5518,34 @@ async function deleteAllHiddenPlaceholders() {
                 context.load(paragraph, "text");
                 await context.sync();
                 
-                // 检查段落是否只包含占位符
                 const paraText = paragraph.text.trim();
-                if (paraText === HIDDEN_PLACEHOLDER_TEXT) {
+                
+                // 检查段落是否只包含 [▶xxx] 格式的占位符
+                if (/^\[▶.+\]$/.test(paraText)) {
                     // 整个段落只有占位符，删除整个段落
                     paragraph.delete();
-                } else {
-                    // 段落还有其他内容，只删除占位符文本
-                    range.delete();
+                    deletedCount++;
+                } else if (paraText.includes("[▶") && paraText.includes("]")) {
+                    // 段落还有其他内容，尝试精确删除占位符
+                    // 扩展 range 到包含完整的 [▶xxx]
+                    const expandedRange = range.expandTo(range.getRange("End").expandTo(
+                        paragraph.getRange("Content")
+                    ));
+                    context.load(expandedRange, "text");
+                    await context.sync();
+                    
+                    // 使用正则匹配 [▶xxx] 并删除
+                    const match = expandedRange.text.match(/\[▶[^\]]+\]/);
+                    if (match) {
+                        const placeholderRange = paragraph.search(match[0], { matchCase: true });
+                        context.load(placeholderRange, "items");
+                        await context.sync();
+                        if (placeholderRange.items.length > 0) {
+                            placeholderRange.items[0].delete();
+                            deletedCount++;
+                        }
+                    }
                 }
-                
-                deletedCount++;
             }
             
             await context.sync();
@@ -5304,20 +5661,43 @@ if (typeof Office !== 'undefined') {
 }
 
 /* ==================================================================
- * 自定义字段管理器 - 重构版（底部面板 + 拖拽）
+ * 字段管理工具
  * ================================================================== */
 
-// 自定义字段数组
-let customFields = [];
+// 待放置的自定义字段（创建后暂存，拖拽后移入 contractConfig）
+let pendingFields = [];
+const PENDING_FIELDS_KEY = "contract_addin:pendingFields";
 
-// LocalStorage key
-const CUSTOM_FIELDS_KEY = "customFields";
+// 当前拖拽的待放置字段
+let draggingPendingField = null;
 
-// 当前拖拽的字段
-let draggingField = null;
+/**
+ * 加载待放置字段
+ */
+function loadPendingFields() {
+    try {
+        const stored = localStorage.getItem(PENDING_FIELDS_KEY);
+        if (stored) {
+            pendingFields = JSON.parse(stored);
+            console.log("[PendingFields] 已加载", pendingFields.length, "个待放置字段");
+        }
+    } catch (e) {
+        console.warn("[PendingFields] 加载失败:", e.message);
+        pendingFields = [];
+    }
+}
 
-// 编辑中的字段 ID
-let editingFieldId = null;
+/**
+ * 保存待放置字段
+ */
+function savePendingFields() {
+    try {
+        localStorage.setItem(PENDING_FIELDS_KEY, JSON.stringify(pendingFields));
+        console.log("[PendingFields] 已保存", pendingFields.length, "个待放置字段");
+    } catch (e) {
+        console.warn("[PendingFields] 保存失败:", e.message);
+    }
+}
 
 /* ------------------------------------------------------------------
  * 拼音转换 - 常用汉字映射表
@@ -5421,33 +5801,6 @@ function toPinyin(chinese) {
     return result || 'CustomField';
 }
 
-/**
- * 从 LocalStorage 加载自定义字段
- */
-function loadCustomFields() {
-    try {
-        const stored = localStorage.getItem(CUSTOM_FIELDS_KEY);
-        if (stored) {
-            customFields = JSON.parse(stored);
-            console.log("[CustomFields] 已加载", customFields.length, "个自定义字段");
-        }
-    } catch (e) {
-        console.warn("[CustomFields] 加载失败:", e.message);
-        customFields = [];
-    }
-}
-
-/**
- * 保存自定义字段到 LocalStorage
- */
-function saveCustomFields() {
-    try {
-        localStorage.setItem(CUSTOM_FIELDS_KEY, JSON.stringify(customFields));
-        console.log("[CustomFields] 已保存", customFields.length, "个自定义字段");
-    } catch (e) {
-        console.warn("[CustomFields] 保存失败:", e.message);
-    }
-}
 
 /**
  * 渲染自定义字段列表（底部面板横向布局）
@@ -5464,79 +5817,105 @@ function renderCustomFieldsPanel() {
         radio: "单选"
     };
     
-    // 保留添加按钮，清空其余
-    const addCard = listContainer.querySelector(".add-field-card");
     listContainer.innerHTML = '';
     
-    // 重新添加添加按钮
+    // 添加字段按钮
     const addBtn = document.createElement("div");
     addBtn.className = "add-field-card";
     addBtn.id = "btn-add-field";
-    addBtn.innerHTML = `
-        <i class="ms-Icon ms-Icon--Add" aria-hidden="true"></i>
-        <span>添加字段</span>
-    `;
+    addBtn.innerHTML = `<i class="ms-Icon ms-Icon--Add" aria-hidden="true"></i> 添加`;
     addBtn.onclick = showAddFieldModal;
     listContainer.appendChild(addBtn);
     
-    // 如果没有字段，显示提示
-    if (customFields.length === 0) {
-        const emptyHint = document.createElement("div");
-        emptyHint.className = "empty-state";
-        emptyHint.innerHTML = `
-            <i class="ms-Icon ms-Icon--FieldEmpty" aria-hidden="true"></i>
-            <p>拖拽字段到表单中使用</p>
-        `;
-        listContainer.appendChild(emptyHint);
+    // 如果没有待放置字段，不显示任何提示
+    if (pendingFields.length === 0) {
         return;
     }
     
-    // 渲染每个字段卡片
-    customFields.filter(f => !f.position).forEach(field => {
+    // 渲染每个待放置字段卡片
+    pendingFields.forEach(field => {
         const card = document.createElement("div");
         card.className = "custom-field-card";
-        card.id = `cf-card-${field.id}`;
+        card.id = `pending-card-${field.id}`;
         card.draggable = true;
         card.dataset.fieldId = field.id;
         
-        let actionButtons = "";
-        if (field.insertMode === "insert" || field.insertMode === "both") {
-            actionButtons += `<button class="field-action-btn insert" data-action="insert">插入</button>`;
-        }
-        if (field.insertMode === "paragraph" || field.insertMode === "both") {
-            actionButtons += `<button class="field-action-btn paragraph" data-action="paragraph">段落</button>`;
-        }
-        
         card.innerHTML = `
-            <button class="field-delete-btn" data-action="delete" title="删除">
-                <i class="ms-Icon ms-Icon--Delete" aria-hidden="true"></i>
-            </button>
-            <div class="field-label">${escapeHtml(field.label)}</div>
+            <div class="field-label" title="${escapeHtml(field.label)}">${escapeHtml(field.label)}</div>
             <div class="field-meta">${typeLabels[field.type] || field.type}</div>
-            <div class="field-actions">${actionButtons}</div>
+            <button class="field-delete-btn" data-action="delete" title="删除">×</button>
         `;
         
-        // 事件绑定
-        card.querySelectorAll(".field-action-btn").forEach(btn => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                const action = btn.dataset.action;
-                if (action === "insert") insertCustomField(field.id, false);
-                if (action === "paragraph") insertCustomField(field.id, true);
-            };
-        });
-        
+        // 删除按钮事件
         card.querySelector(".field-delete-btn").onclick = (e) => {
             e.stopPropagation();
-            deleteCustomField(field.id);
+            deletePendingField(field.id);
         };
         
         // 拖拽事件
-        card.addEventListener("dragstart", handleDragStart);
-        card.addEventListener("dragend", handleDragEnd);
+        card.addEventListener("dragstart", handlePendingFieldDragStart);
+        card.addEventListener("dragend", handlePendingFieldDragEnd);
         
         listContainer.appendChild(card);
     });
+}
+
+/**
+ * 删除待放置字段
+ */
+function deletePendingField(fieldId) {
+    const field = pendingFields.find(f => f.id === fieldId);
+    if (!field) return;
+    
+    showConfirmDialog(`确定要删除字段 "${field.label}" 吗？`, {
+        confirmText: "删除",
+        cancelText: "取消",
+        confirmStyle: "background:#ef4444;color:#fff;"
+    }).then(confirmed => {
+        if (confirmed) {
+            pendingFields = pendingFields.filter(f => f.id !== fieldId);
+            savePendingFields();
+            renderCustomFieldsPanel();
+            showNotification(`已删除字段: ${field.label}`, "success");
+        }
+    });
+}
+
+/**
+ * 待放置字段拖拽开始
+ */
+function handlePendingFieldDragStart(e) {
+    const card = e.target.closest(".custom-field-card");
+    if (!card) return;
+    
+    draggingPendingField = pendingFields.find(f => f.id === card.dataset.fieldId);
+    if (!draggingPendingField) return;
+    
+    card.classList.add("dragging");
+    document.body.classList.add("dragging-field");
+    
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", JSON.stringify({ type: "pending", fieldId: draggingPendingField.id }));
+    
+    // 显示放置区
+    showDropZones();
+    
+    console.log("[DragDrop] 开始拖拽待放置字段:", draggingPendingField.label);
+}
+
+/**
+ * 待放置字段拖拽结束
+ */
+function handlePendingFieldDragEnd(e) {
+    const card = e.target.closest(".custom-field-card");
+    if (card) card.classList.remove("dragging");
+    
+    document.body.classList.remove("dragging-field");
+    draggingPendingField = null;
+    
+    hideDropZones();
+    
+    console.log("[DragDrop] 拖拽结束");
 }
 
 /**
@@ -5559,10 +5938,12 @@ function showAddFieldModal() {
         const labelInput = document.getElementById("field-label");
         labelInput.value = "";
         document.getElementById("field-type").value = "text";
-        document.getElementById("field-options").value = "";
         document.getElementById("options-group").style.display = "none";
         document.getElementById("tag-preview").style.display = "none";
         document.getElementById("tag-preview-text").textContent = "";
+        
+        // 重置选项列表
+        resetAddOptions();
         
         // 重置插入模式选择
         document.querySelectorAll("#add-field-modal .insert-mode-option").forEach(opt => {
@@ -5574,8 +5955,8 @@ function showAddFieldModal() {
         });
         
         // 设置弹窗标题
-        document.getElementById("modal-title").textContent = "添加自定义字段";
-        document.getElementById("modal-confirm").textContent = "添加字段";
+        document.getElementById("modal-title").textContent = "添加新字段";
+        document.getElementById("modal-confirm").textContent = "创建字段";
         
         // 聚焦到名称输入框
         setTimeout(() => labelInput.focus(), 100);
@@ -5609,13 +5990,133 @@ function updateTagPreview() {
     }
 }
 
+// ========== 选项管理（支持多行选项） ==========
+
+// 临时选项存储（添加字段弹窗用）
+let tempAddOptions = [];
+// 临时选项存储（编辑字段弹窗用）
+let tempEditOptions = [];
+
 /**
- * 添加自定义字段
+ * 渲染选项列表
+ * @param {string} containerId - 列表容器 ID
+ * @param {Array} options - 选项数组
+ * @param {string} mode - 'add' 或 'edit'
+ */
+function renderOptionsList(containerId, options, mode) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    if (options.length === 0) {
+        container.innerHTML = '<div class="options-empty">暂无选项，点击下方按钮添加</div>';
+        return;
+    }
+    
+    container.innerHTML = options.map((opt, idx) => `
+        <div class="option-item" data-index="${idx}">
+            <span class="option-index">${idx + 1}</span>
+            <div class="option-text" title="${escapeHtml(opt)}">${escapeHtml(opt)}</div>
+            <button type="button" class="option-delete" onclick="removeOption(${idx}, '${mode}')">×</button>
+        </div>
+    `).join('');
+}
+
+/**
+ * 显示添加选项的弹窗
+ * @param {string} mode - 'add' 或 'edit'
+ */
+function showAddOptionModal(mode) {
+    // 移除已存在的弹窗
+    const existing = document.getElementById("option-input-modal");
+    if (existing) existing.remove();
+    
+    const modal = document.createElement("div");
+    modal.id = "option-input-modal";
+    modal.className = "option-input-modal";
+    modal.innerHTML = `
+        <div class="option-input-box">
+            <h4>添加选项</h4>
+            <textarea id="new-option-text" placeholder="输入选项内容（支持多行）"></textarea>
+            <div class="option-input-actions">
+                <button type="button" class="btn-cancel" onclick="closeAddOptionModal()">取消</button>
+                <button type="button" class="btn-confirm" onclick="confirmAddOption('${mode}')">确定</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    // 自动聚焦
+    setTimeout(() => {
+        document.getElementById("new-option-text")?.focus();
+    }, 100);
+}
+
+/**
+ * 关闭添加选项弹窗
+ */
+function closeAddOptionModal() {
+    const modal = document.getElementById("option-input-modal");
+    if (modal) modal.remove();
+}
+
+/**
+ * 确认添加选项
+ */
+function confirmAddOption(mode) {
+    const textarea = document.getElementById("new-option-text");
+    const value = textarea?.value.trim();
+    
+    if (!value) {
+        showNotification("请输入选项内容", "error");
+        return;
+    }
+    
+    if (mode === 'add') {
+        tempAddOptions.push(value);
+        renderOptionsList("field-options-list", tempAddOptions, 'add');
+    } else if (mode === 'edit') {
+        tempEditOptions.push(value);
+        renderOptionsList("ufm-options-list", tempEditOptions, 'edit');
+    }
+    
+    closeAddOptionModal();
+}
+
+/**
+ * 移除选项
+ */
+function removeOption(index, mode) {
+    if (mode === 'add') {
+        tempAddOptions.splice(index, 1);
+        renderOptionsList("field-options-list", tempAddOptions, 'add');
+    } else if (mode === 'edit') {
+        tempEditOptions.splice(index, 1);
+        renderOptionsList("ufm-options-list", tempEditOptions, 'edit');
+    }
+}
+
+/**
+ * 重置添加字段弹窗的选项
+ */
+function resetAddOptions() {
+    tempAddOptions = [];
+    renderOptionsList("field-options-list", tempAddOptions, 'add');
+}
+
+/**
+ * 设置编辑字段弹窗的选项
+ */
+function setEditOptions(options) {
+    tempEditOptions = [...(options || [])];
+    renderOptionsList("ufm-options-list", tempEditOptions, 'edit');
+}
+
+/**
+ * 添加新字段（统一添加到 contractConfig）
  */
 function addCustomFieldFromModal() {
     const label = document.getElementById("field-label").value.trim();
     const type = document.getElementById("field-type").value;
-    const optionsText = document.getElementById("field-options").value.trim();
     const insertMode = document.querySelector('#add-field-modal input[name="insert-mode"]:checked')?.value || "insert";
     
     // 验证
@@ -5627,157 +6128,445 @@ function addCustomFieldFromModal() {
     // 自动生成 Tag（拼音）
     let tag = toPinyin(label);
     
-    // 检查 tag 是否重复，如果重复则添加数字后缀
+    // 检查 tag 是否在 contractConfig 和 pendingFields 中重复
     let counter = 1;
     let originalTag = tag;
-    while (customFields.some(f => f.tag === tag)) {
+    const allTags = [];
+    contractConfig.forEach(sec => {
+        if (sec.fields) {
+            sec.fields.forEach(f => allTags.push(f.tag));
+        }
+    });
+    pendingFields.forEach(f => allTags.push(f.tag));
+    while (allTags.includes(tag)) {
         tag = originalTag + counter;
         counter++;
     }
     
-    // 解析选项
-    let options = [];
+    // 从临时数组获取选项
+    let options = [...tempAddOptions];
+    
+    // 选择类型需要至少一个选项
     if (type === "select" || type === "radio") {
-        options = optionsText.split("\n").map(s => s.trim()).filter(s => s);
         if (options.length === 0) {
-            showNotification("请输入至少一个选项", "error");
+            showNotification("请添加至少一个选项", "error");
             return;
         }
     }
     
-    // 创建字段
+    // 创建字段对象
     const newField = {
-        id: "cf_" + Date.now(),
+        id: "pending_" + Date.now(),
         label,
         tag,
         type,
-        options,
-        insertMode,
-        position: null // 暂无位置
+        options: options.length > 0 ? options : undefined,
+        hasParagraphToggle: insertMode === "paragraph" || insertMode === "both"
     };
     
-    customFields.push(newField);
-    saveCustomFields();
-    renderCustomFieldsPanel();
-    hideAddFieldModal();
+    // 添加到待放置区
+    pendingFields.push(newField);
+    savePendingFields();
     
-    showNotification(`已添加字段: ${label} (Tag: ${tag})`, "success");
+    // 重置选项
+    resetAddOptions();
+    
+    // 重新渲染底部面板
+    renderCustomFieldsPanel();
+    
+    hideAddFieldModal();
+    showNotification(`已创建字段: ${label}，请拖拽到表单中放置`, "success");
+}
+
+
+/* ------------------------------------------------------------------
+ * 字段编辑系统 (Field Editor)
+ * ------------------------------------------------------------------ */
+
+// 正在拖拽的表单字段信息
+let draggingFormFieldInfo = null;
+
+/**
+ * 表单字段拖拽开始
+ */
+function handleFieldDragStart(e) {
+    const formGroup = e.target.closest(".form-group");
+    if (!formGroup) return;
+    
+    // 如果从 input/select/textarea/button 开始拖拽，阻止（让用户正常操作这些元素）
+    const targetTag = e.target.tagName.toLowerCase();
+    if (["input", "select", "textarea", "button"].includes(targetTag)) {
+        e.preventDefault();
+        return;
+    }
+    
+    const sectionId = formGroup.dataset.sectionId;
+    const fieldId = formGroup.dataset.fieldId;
+    const fieldIndex = parseInt(formGroup.dataset.fieldIndex || 0);
+    
+    draggingFormFieldInfo = { sectionId, fieldId, fieldIndex, element: formGroup };
+    formGroup.classList.add("dragging");
+    document.body.classList.add("dragging-field");
+    
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", JSON.stringify({ type: "form-field", sectionId, fieldId, fieldIndex }));
+    
+    // 显示放置区
+    showDropZones();
+    
+    console.log("[FieldDrag] 开始拖拽:", { sectionId, fieldId, fieldIndex });
 }
 
 /**
- * 删除自定义字段
+ * 表单字段拖拽结束
  */
-function deleteCustomField(fieldId) {
-    const field = customFields.find(f => f.id === fieldId);
-    if (!field) return;
+function handleFieldDragEnd(e) {
+    const formGroup = e.target.closest(".form-group");
+    if (formGroup) formGroup.classList.remove("dragging");
     
-    // 使用自定义对话框替代 confirm
-    showConfirmDialog(`确定要删除字段 "${field.label}" 吗？`, {
+    document.body.classList.remove("dragging-field");
+    draggingFormFieldInfo = null;
+    
+    hideDropZones();
+    
+    console.log("[FieldDrag] 拖拽结束");
+}
+
+/**
+ * 编辑 Section 中的字段
+ */
+function editFieldInSection(sectionId, fieldIdOrIndex) {
+    // 查找 section 和字段
+    const section = contractConfig.find(s => s.id === sectionId);
+    if (!section || !section.fields) {
+        console.error("[EditField] 未找到 section:", sectionId);
+        return;
+    }
+    
+    let field;
+    let fieldIndex;
+    if (typeof fieldIdOrIndex === "number") {
+        fieldIndex = fieldIdOrIndex;
+        field = section.fields[fieldIndex];
+    } else {
+        fieldIndex = section.fields.findIndex(f => f.id === fieldIdOrIndex);
+        field = section.fields[fieldIndex];
+    }
+    
+    if (!field) {
+        console.error("[EditField] 未找到字段:", fieldIdOrIndex);
+        return;
+    }
+    
+    // 打开编辑弹窗
+    showFieldEditModal(sectionId, fieldIndex, field);
+}
+
+/**
+ * 显示字段编辑弹窗
+ */
+function showFieldEditModal(sectionId, fieldIndex, field) {
+    // 如果弹窗不存在，创建它
+    let modal = document.getElementById("universal-field-edit-modal");
+    if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "universal-field-edit-modal";
+        modal.className = "modal-overlay";
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 480px;">
+                <div class="modal-header">
+                    <h3 id="ufm-title">编辑字段</h3>
+                    <button class="modal-close" onclick="hideFieldEditModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="ufm-section-id">
+                    <input type="hidden" id="ufm-field-index">
+                    
+                    <div class="form-group-modal">
+                        <label>字段名称</label>
+                        <input type="text" id="ufm-label" class="modal-input" placeholder="如：签订时间">
+                    </div>
+                    
+                    <div class="form-group-modal">
+                        <label>Tag 标签 (只读)</label>
+                        <input type="text" id="ufm-tag" class="modal-input" readonly style="background:#f1f5f9;color:#64748b;">
+                    </div>
+                    
+                    <div class="form-group-modal">
+                        <label>字段类型</label>
+                        <select id="ufm-type" class="modal-input" onchange="onUfmTypeChange()">
+                            <option value="text">文本</option>
+                            <option value="number">数字</option>
+                            <option value="date">日期</option>
+                            <option value="select">下拉选择</option>
+                            <option value="radio">单选按钮</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group-modal" id="ufm-options-group" style="display:none;">
+                        <label>选项列表</label>
+                        <div class="options-list" id="ufm-options-list"></div>
+                        <button type="button" class="add-option-btn" onclick="showAddOptionModal('edit')">
+                            <i class="ms-Icon ms-Icon--Add" aria-hidden="true"></i> 添加选项
+                        </button>
+                    </div>
+                    
+                    <div class="form-group-modal">
+                        <label>移动到 Section</label>
+                        <select id="ufm-target-section" class="modal-input">
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="modal-btn danger" onclick="deleteFieldInSection()">
+                        <i class="ms-Icon ms-Icon--Delete" aria-hidden="true"></i> 删除字段
+                    </button>
+                    <div style="flex:1;"></div>
+                    <button class="modal-btn secondary" onclick="hideFieldEditModal()">取消</button>
+                    <button class="modal-btn primary" onclick="saveFieldEdit()">保存</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // 填充表单
+    document.getElementById("ufm-section-id").value = sectionId;
+    document.getElementById("ufm-field-index").value = fieldIndex;
+    document.getElementById("ufm-label").value = field.label || "";
+    document.getElementById("ufm-tag").value = field.tag || "";
+    document.getElementById("ufm-type").value = field.type || "text";
+    
+    // 选项 - 使用选项列表
+    const optionsGroup = document.getElementById("ufm-options-group");
+    if (field.type === "select" || field.type === "radio") {
+        optionsGroup.style.display = "block";
+        setEditOptions(field.options || []);
+    } else {
+        optionsGroup.style.display = "none";
+        setEditOptions([]);
+    }
+    
+    // 填充目标 Section 下拉框
+    const targetSelect = document.getElementById("ufm-target-section");
+    targetSelect.innerHTML = "";
+    contractConfig.forEach(sec => {
+        if (sec.fields) { // 只显示有 fields 的普通 section
+            const opt = document.createElement("option");
+            opt.value = sec.id;
+            opt.textContent = sec.header.label;
+            if (sec.id === sectionId) opt.selected = true;
+            targetSelect.appendChild(opt);
+        }
+    });
+    
+    modal.classList.add("show");
+}
+
+/**
+ * 类型改变时显示/隐藏选项区
+ */
+function onUfmTypeChange() {
+    const type = document.getElementById("ufm-type").value;
+    const optionsGroup = document.getElementById("ufm-options-group");
+    const isOptionType = (type === "select" || type === "radio");
+    optionsGroup.style.display = isOptionType ? "block" : "none";
+    
+    // 如果切换到非选项类型，清空选项列表
+    if (!isOptionType) {
+        setEditOptions([]);
+    }
+}
+
+/**
+ * 隐藏字段编辑弹窗
+ */
+function hideFieldEditModal() {
+    const modal = document.getElementById("universal-field-edit-modal");
+    if (modal) modal.classList.remove("show");
+}
+
+/**
+ * 保存字段编辑
+ */
+function saveFieldEdit() {
+    const sectionId = document.getElementById("ufm-section-id").value;
+    const fieldIndex = parseInt(document.getElementById("ufm-field-index").value);
+    const newLabel = document.getElementById("ufm-label").value.trim();
+    const newType = document.getElementById("ufm-type").value;
+    const targetSectionId = document.getElementById("ufm-target-section").value;
+    
+    if (!newLabel) {
+        showNotification("请输入字段名称", "error");
+        return;
+    }
+    
+    // 查找并更新字段
+    const section = contractConfig.find(s => s.id === sectionId);
+    if (!section || !section.fields || !section.fields[fieldIndex]) {
+        showNotification("字段不存在", "error");
+        return;
+    }
+    
+    const field = section.fields[fieldIndex];
+    
+    // 更新字段属性
+    field.label = newLabel;
+    field.type = newType;
+    
+    // 更新选项 - 从临时数组读取
+    if (newType === "select" || newType === "radio") {
+        if (tempEditOptions.length === 0) {
+            showNotification("请添加至少一个选项", "error");
+            return;
+        }
+        field.options = [...tempEditOptions];
+    } else {
+        // 非选项类型，清除选项
+        delete field.options;
+    }
+    
+    // 如果需要移动到其他 Section
+    if (targetSectionId !== sectionId) {
+        // 从原 section 移除
+        section.fields.splice(fieldIndex, 1);
+        
+        // 添加到目标 section
+        const targetSection = contractConfig.find(s => s.id === targetSectionId);
+        if (targetSection && targetSection.fields) {
+            targetSection.fields.push(field);
+        }
+    }
+    
+    // 保存配置
+    saveFormConfig();
+    
+    // 重新构建表单
+    buildForm();
+    
+    hideFieldEditModal();
+    showNotification(`字段 "${newLabel}" 已更新`, "success");
+}
+
+/**
+ * 删除 Section 中的字段
+ */
+function deleteFieldInSection() {
+    const sectionId = document.getElementById("ufm-section-id").value;
+    const fieldIndex = parseInt(document.getElementById("ufm-field-index").value);
+    
+    const section = contractConfig.find(s => s.id === sectionId);
+    if (!section || !section.fields || !section.fields[fieldIndex]) {
+        showNotification("字段不存在", "error");
+        hideFieldEditModal(); // 关闭弹窗
+        return;
+    }
+    
+    const field = section.fields[fieldIndex];
+    const fieldLabel = field.label; // 保存名称用于提示
+    
+    // 先关闭编辑弹窗
+    hideFieldEditModal();
+    
+    showConfirmDialog(`确定要删除字段 "${fieldLabel}" 吗？此操作不可撤销。`, {
         confirmText: "删除",
         cancelText: "取消",
         confirmStyle: "background:#ef4444;color:#fff;"
     }).then(confirmed => {
         if (confirmed) {
-            customFields = customFields.filter(f => f.id !== fieldId);
-            saveCustomFields();
-            renderCustomFieldsPanel();
-            removeCustomFieldFromForm(fieldId);
-            showNotification(`已删除字段: ${field.label}`, "success");
+            // 删除字段
+            section.fields.splice(fieldIndex, 1);
+            
+            // 保存配置
+            saveFormConfig();
+            
+            // 重新构建表单
+            buildForm();
+            
+            showNotification(`字段 "${fieldLabel}" 已删除`, "success");
         }
     });
 }
 
 /**
- * 插入自定义字段到 Word 文档
+ * 在配置中移动字段位置
  */
-function insertCustomField(fieldId, isParagraphMode) {
-    const field = customFields.find(f => f.id === fieldId);
-    if (!field) return;
+function moveFieldInConfig(fromSectionId, toSectionId, fromIndex, toIndex) {
+    const fromSection = contractConfig.find(s => s.id === fromSectionId);
+    if (!fromSection || !fromSection.fields) return false;
     
-    // 调用现有的 insertControl 函数
-    if (typeof insertControl === "function") {
-        insertControl(field.tag, field.label, isParagraphMode);
+    const field = fromSection.fields[fromIndex];
+    if (!field) return false;
+    
+    // 从原位置移除
+    fromSection.fields.splice(fromIndex, 1);
+    
+    if (fromSectionId === toSectionId) {
+        // 同 Section 内移动
+        // 如果目标位置在原位置之后，需要调整索引
+        const adjustedIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
+        fromSection.fields.splice(adjustedIndex, 0, field);
     } else {
-        console.error("[CustomFields] insertControl 函数不存在");
+        // 跨 Section 移动
+        const toSection = contractConfig.find(s => s.id === toSectionId);
+        if (!toSection || !toSection.fields) return false;
+        toSection.fields.splice(toIndex, 0, field);
     }
+    
+    return true;
 }
 
 /* ------------------------------------------------------------------
  * 拖拽系统 (Drag & Drop)
  * ------------------------------------------------------------------ */
 
-/**
- * 拖拽开始
- */
-function handleDragStart(e) {
-    const card = e.target.closest(".custom-field-card");
-    if (!card) return;
-    
-    draggingField = customFields.find(f => f.id === card.dataset.fieldId);
-    if (!draggingField) return;
-    
-    card.classList.add("dragging");
-    document.body.classList.add("dragging-field");
-    
-    // 设置拖拽数据
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", draggingField.id);
-    
-    // 显示放置区
-    showDropZones();
-    
-    console.log("[DragDrop] 开始拖拽:", draggingField.label);
-}
-
-/**
- * 拖拽结束
- */
-function handleDragEnd(e) {
-    const card = e.target.closest(".custom-field-card");
-    if (card) card.classList.remove("dragging");
-    
-    document.body.classList.remove("dragging-field");
-    draggingField = null;
-    
-    // 隐藏放置区
-    hideDropZones();
-    
-    console.log("[DragDrop] 拖拽结束");
-}
 
 /**
  * 显示放置区
  */
 function showDropZones() {
+    // 移除旧的放置区，重新创建以确保位置正确
+    document.querySelectorAll(".drop-zone").forEach(z => z.remove());
+    
     // 在每个 section header 后添加放置区
     document.querySelectorAll(".section-header-container").forEach(header => {
-        // 检查是否已有放置区
-        let zone = header.parentNode.querySelector(`.drop-zone[data-header-id="${header.id}"]`);
-        if (!zone) {
-            zone = document.createElement("div");
-            zone.className = "drop-zone";
-            zone.dataset.headerId = header.id;
-            zone.addEventListener("dragover", handleDragOver);
-            zone.addEventListener("dragleave", handleDragLeave);
-            zone.addEventListener("drop", handleDrop);
-            header.parentNode.insertBefore(zone, header.nextSibling);
+        const sectionId = header.id.replace("section-nav-", "");
+        
+        const zone = document.createElement("div");
+        zone.className = "drop-zone";
+        zone.dataset.headerId = header.id;
+        zone.dataset.targetSectionId = sectionId;
+        zone.dataset.targetIndex = "0"; // 放在 section 最前面
+        zone.addEventListener("dragover", handleDragOver);
+        zone.addEventListener("dragleave", handleDragLeave);
+        zone.addEventListener("drop", handleDrop);
+        
+        // 插入到 section-fields 之前（header 后面）
+        const nextSibling = header.nextElementSibling;
+        if (nextSibling) {
+            header.parentNode.insertBefore(zone, nextSibling);
+        } else {
+            header.parentNode.appendChild(zone);
         }
         zone.style.display = "block";
     });
     
-    // 也在每个 form-group 后添加放置区（更精细的位置控制）
-    document.querySelectorAll("#dynamic-form-container .form-group").forEach((formGroup, index) => {
-        let zone = formGroup.parentNode.querySelector(`.drop-zone[data-after-group="${formGroup.id || index}"]`);
-        if (!zone) {
-            zone = document.createElement("div");
-            zone.className = "drop-zone";
-            zone.dataset.afterGroup = formGroup.id || index;
-            zone.dataset.afterElement = formGroup.id || '';
-            zone.addEventListener("dragover", handleDragOver);
-            zone.addEventListener("dragleave", handleDragLeave);
-            zone.addEventListener("drop", handleDrop);
-            formGroup.parentNode.insertBefore(zone, formGroup.nextSibling);
-        }
+    // 在每个 form-group 后添加放置区（更精细的位置控制）
+    document.querySelectorAll("#dynamic-form-container .form-group").forEach((formGroup) => {
+        const sectionId = formGroup.dataset.sectionId;
+        const fieldIndex = parseInt(formGroup.dataset.fieldIndex || 0);
+        
+        const zone = document.createElement("div");
+        zone.className = "drop-zone";
+        zone.dataset.afterGroup = formGroup.id;
+        zone.dataset.afterElement = formGroup.id;
+        zone.dataset.targetSectionId = sectionId;
+        zone.dataset.targetIndex = String(fieldIndex + 1); // 放在该字段之后
+        zone.addEventListener("dragover", handleDragOver);
+        zone.addEventListener("dragleave", handleDragLeave);
+        zone.addEventListener("drop", handleDrop);
+        
+        formGroup.parentNode.insertBefore(zone, formGroup.nextSibling);
         zone.style.display = "block";
     });
 }
@@ -5815,485 +6604,112 @@ function handleDrop(e) {
     e.preventDefault();
     e.target.classList.remove("drag-over");
     
-    if (!draggingField) {
-        console.log("[DragDrop] 没有正在拖拽的字段");
-        return;
-    }
-    
     const zone = e.target.closest(".drop-zone");
     if (!zone) {
         console.log("[DragDrop] 未找到放置区");
         return;
     }
     
-    // 确定放置位置
-    const headerId = zone.dataset.headerId;
-    const afterElement = zone.dataset.afterElement;
+    const targetSectionId = zone.dataset.targetSectionId;
+    const targetIndex = parseInt(zone.dataset.targetIndex || 0);
     
-    console.log("[DragDrop] 放置到:", { headerId, afterElement });
-    
-    // 更新字段位置
-    draggingField.position = {
-        afterHeaderId: headerId || null,
-        afterElementId: afterElement || null
-    };
-    
-    // 保存到 LocalStorage
-    saveCustomFields();
-    
-    // 先移除旧的渲染（如果有）
-    removeCustomFieldFromForm(draggingField.id);
-    
-    // 渲染字段到新位置
-    renderCustomFieldInForm(draggingField, headerId, afterElement);
-    
-    // 更新底部面板（移除已放置的字段卡片）
-    renderCustomFieldsPanel();
+    // 1. 表单字段拖拽（在 contractConfig 中移动位置）
+    if (draggingFormFieldInfo) {
+        const { sectionId: fromSectionId, fieldIndex: fromIndex } = draggingFormFieldInfo;
+        
+        console.log("[DragDrop] 表单字段移动:", { fromSectionId, fromIndex, targetSectionId, targetIndex });
+        
+        if (fromSectionId === targetSectionId && fromIndex === targetIndex) {
+            console.log("[DragDrop] 位置未变化，忽略");
+        } else {
+            const success = moveFieldInConfig(fromSectionId, targetSectionId, fromIndex, targetIndex);
+            if (success) {
+                // 【修复】保存滚动位置
+                const scrollTop = document.querySelector(".main-content")?.scrollTop || 0;
+                
+                saveFormConfig();
+                buildForm();
+                
+                // 【修复】延迟恢复滚动位置，确保 DOM 渲染完成
+                requestAnimationFrame(() => {
+                    const mc = document.querySelector(".main-content");
+                    if (mc) mc.scrollTop = scrollTop;
+                });
+                
+                showNotification("字段位置已更新", "success");
+            } else {
+                showNotification("移动失败", "error");
+            }
+        }
+        
+        draggingFormFieldInfo = null;
+    }
+    // 2. 待放置字段拖拽（从 pendingFields 移入 contractConfig）
+    else if (draggingPendingField) {
+        console.log("[DragDrop] 放置待放置字段:", draggingPendingField.label, "到", targetSectionId, "位置", targetIndex);
+        
+        // 找到目标 section
+        const targetSection = contractConfig.find(s => s.id === targetSectionId);
+        if (targetSection && targetSection.fields) {
+            // 创建正式字段对象（修改 ID 前缀）
+            const newField = {
+                ...draggingPendingField,
+                id: draggingPendingField.id.replace("pending_", "field_")
+            };
+            
+            // 插入到目标位置
+            targetSection.fields.splice(targetIndex, 0, newField);
+            
+            // 从 pendingFields 移除
+            pendingFields = pendingFields.filter(f => f.id !== draggingPendingField.id);
+            
+            // 保存
+            saveFormConfig();
+            savePendingFields();
+            
+            // 【修复】保存滚动位置
+            const scrollTop = document.querySelector(".main-content")?.scrollTop || 0;
+            
+            // 重新渲染
+            buildForm();
+            renderCustomFieldsPanel();
+            
+            // 【修复】延迟恢复滚动位置，确保 DOM 渲染完成
+            requestAnimationFrame(() => {
+                const mc = document.querySelector(".main-content");
+                if (mc) mc.scrollTop = scrollTop;
+            });
+            
+            showNotification(`已将 "${newField.label}" 放置到表单`, "success");
+        } else {
+            showNotification("无法放置到该位置", "error");
+        }
+        
+        draggingPendingField = null;
+    }
+    else {
+        console.log("[DragDrop] 没有正在拖拽的字段");
+    }
     
     // 隐藏放置区
     hideDropZones();
     document.body.classList.remove("dragging-field");
-    
-    const fieldLabel = draggingField.label;
-    draggingField = null;
-    
-    showNotification(`已将 "${fieldLabel}" 放置到表单`, "success");
 }
 
-/**
- * 将字段放置到指定位置（点击放置模式，保留兼容）
- */
-function placeFieldAt(fieldId, afterHeaderId) {
-    const field = customFields.find(f => f.id === fieldId);
-    if (!field) return;
-    
-    // 更新字段位置
-    field.position = { afterHeaderId };
-    saveCustomFields();
-    
-    // 渲染字段到表单
-    renderCustomFieldInForm(field, afterHeaderId);
-    
-    // 更新底部面板
-    renderCustomFieldsPanel();
-    
-    showNotification(`已将 "${field.label}" 放置到表单`, "success");
-}
+
+
 
 /**
- * 渲染自定义字段到表单指定位置
- */
-function renderCustomFieldInForm(field, afterHeaderId, afterElementId) {
-    // 先移除已有的
-    removeCustomFieldFromForm(field.id);
-    
-    // 创建字段容器
-    const wrapper = document.createElement("div");
-    wrapper.className = "form-group custom-field-in-form";
-    wrapper.id = `form-cf-${field.id}`;
-    wrapper.dataset.customFieldId = field.id;
-    wrapper.draggable = true; // 支持拖拽调整位置
-    
-    // 编辑按钮（右上角）
-    const editBtn = document.createElement("button");
-    editBtn.className = "field-edit-btn";
-    editBtn.innerHTML = '<i class="ms-Icon ms-Icon--Settings" aria-hidden="true"></i>';
-    editBtn.title = "编辑/删除字段";
-    editBtn.onclick = (e) => {
-        e.stopPropagation();
-        showEditFieldModal(field.id);
-    };
-    wrapper.appendChild(editBtn);
-    
-    // 移回面板按钮（左上角）
-    const unplaceBtn = document.createElement("button");
-    unplaceBtn.className = "field-edit-btn";
-    unplaceBtn.style.cssText = "left: 8px; right: auto;";
-    unplaceBtn.innerHTML = '<i class="ms-Icon ms-Icon--Back" aria-hidden="true"></i>';
-    unplaceBtn.title = "移回自定义字段面板";
-    unplaceBtn.onclick = (e) => {
-        e.stopPropagation();
-        unplaceField(field.id);
-    };
-    wrapper.appendChild(unplaceBtn);
-    
-    // 标签行
-    const labelRow = document.createElement("div");
-    labelRow.className = "label-row";
-    const label = document.createElement("label");
-    label.textContent = field.label;
-    labelRow.appendChild(label);
-    
-    // 插入按钮
-    if (field.insertMode === "insert" || field.insertMode === "both") {
-        const insertBtn = document.createElement("button");
-        insertBtn.className = "insert-btn";
-        insertBtn.textContent = "插入";
-        insertBtn.onclick = () => insertCustomField(field.id, false);
-        labelRow.appendChild(insertBtn);
-    }
-    if (field.insertMode === "paragraph" || field.insertMode === "both") {
-        const paraBtn = document.createElement("button");
-        paraBtn.className = "insert-btn";
-        paraBtn.textContent = "插入段落";
-        paraBtn.style.marginLeft = "4px";
-        paraBtn.onclick = () => insertCustomField(field.id, true);
-        labelRow.appendChild(paraBtn);
-    }
-    
-    wrapper.appendChild(labelRow);
-    
-    // 输入控件
-    if (field.type === "text" || field.type === "number" || field.type === "date") {
-        const input = document.createElement("input");
-        input.type = field.type;
-        input.className = "input-field";
-        input.id = `cf-input-${field.id}`;
-        input.dataset.tag = field.tag;
-        input.placeholder = `请输入${field.label}`;
-        input.addEventListener("input", () => {
-            debounce(() => {
-                updateContent(field.tag, input.value, field.label);
-            }, 600)();
-        });
-        wrapper.appendChild(input);
-    } else if (field.type === "select") {
-        const select = document.createElement("select");
-        select.className = "input-field";
-        select.id = `cf-input-${field.id}`;
-        select.dataset.tag = field.tag;
-        const defOpt = document.createElement("option");
-        defOpt.value = "";
-        defOpt.textContent = "请选择...";
-        select.appendChild(defOpt);
-        (field.options || []).forEach(opt => {
-            const option = document.createElement("option");
-            option.value = opt;
-            option.textContent = opt;
-            select.appendChild(option);
-        });
-        select.addEventListener("change", () => {
-            updateContent(field.tag, select.value, field.label);
-        });
-        wrapper.appendChild(select);
-    } else if (field.type === "radio") {
-        const radioGroup = document.createElement("div");
-        radioGroup.className = "radio-group";
-        const groupName = `cf_${field.id}_${Date.now()}`;
-        (field.options || []).forEach(opt => {
-            const rLabel = document.createElement("label");
-            rLabel.className = "radio-label";
-            const radio = document.createElement("input");
-            radio.type = "radio";
-            radio.name = groupName;
-            radio.value = opt;
-            radio.dataset.tag = field.tag;
-            radio.addEventListener("change", () => {
-                updateContent(field.tag, opt, field.label);
-            });
-            rLabel.appendChild(radio);
-            rLabel.appendChild(document.createTextNode(opt));
-            radioGroup.appendChild(rLabel);
-        });
-        wrapper.appendChild(radioGroup);
-    }
-    
-    // 拖拽事件（用于调整位置）
-    wrapper.addEventListener("dragstart", handleFormFieldDragStart);
-    wrapper.addEventListener("dragend", handleFormFieldDragEnd);
-    
-    // 确定插入位置
-    let insertTarget = null;
-    
-    // 优先使用 afterElementId
-    if (afterElementId) {
-        insertTarget = document.getElementById(afterElementId);
-    }
-    
-    // 其次使用 afterHeaderId
-    if (!insertTarget && afterHeaderId) {
-        insertTarget = document.getElementById(afterHeaderId);
-    }
-    
-    if (insertTarget) {
-        // 跳过放置区
-        let nextEl = insertTarget.nextElementSibling;
-        while (nextEl && (nextEl.classList.contains("drop-zone") || nextEl.classList.contains("placement-zone"))) {
-            insertTarget = nextEl;
-            nextEl = nextEl.nextElementSibling;
-        }
-        insertTarget.parentNode.insertBefore(wrapper, insertTarget.nextSibling);
-    } else {
-        // 找不到位置，添加到表单末尾
-        const container = document.getElementById("dynamic-form-container");
-        if (container) {
-            container.appendChild(wrapper);
-        }
-    }
-}
-
-/**
- * 表单字段拖拽开始（用于调整位置）
- */
-function handleFormFieldDragStart(e) {
-    const wrapper = e.target.closest(".form-group.custom-field-in-form");
-    if (!wrapper) {
-        e.preventDefault();
-        return;
-    }
-    
-    const fieldId = wrapper.dataset.customFieldId;
-    draggingField = customFields.find(f => f.id === fieldId);
-    
-    if (draggingField) {
-        // 设置拖拽图像和效果
-        wrapper.classList.add("dragging");
-        document.body.classList.add("dragging-field");
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", fieldId);
-        
-        // 延迟显示放置区（避免拖拽图像问题）
-        setTimeout(() => showDropZones(), 10);
-        
-        console.log("[DragDrop] 开始拖拽已放置字段:", draggingField.label);
-    } else {
-        e.preventDefault();
-    }
-}
-
-/**
- * 表单字段拖拽结束
- */
-function handleFormFieldDragEnd(e) {
-    const wrapper = e.target.closest(".form-group");
-    if (wrapper) wrapper.classList.remove("dragging");
-    
-    document.body.classList.remove("dragging-field");
-    draggingField = null;
-    hideDropZones();
-    
-    console.log("[DragDrop] 拖拽结束");
-}
-
-/**
- * 从表单移除自定义字段
- */
-function removeCustomFieldFromForm(fieldId) {
-    const existing = document.getElementById(`form-cf-${fieldId}`);
-    if (existing) {
-        existing.remove();
-    }
-}
-
-/**
- * 渲染所有已放置的自定义字段
- */
-function renderAllCustomFieldsInForm() {
-    customFields.forEach(field => {
-        if (field.position) {
-            renderCustomFieldInForm(field, field.position.afterHeaderId, field.position.afterElementId);
-        }
-    });
-}
-
-/* ------------------------------------------------------------------
- * 编辑字段弹窗
- * ------------------------------------------------------------------ */
-
-/**
- * 显示编辑字段弹窗
- */
-function showEditFieldModal(fieldId) {
-    const field = customFields.find(f => f.id === fieldId);
-    if (!field) return;
-    
-    editingFieldId = fieldId;
-    
-    const modal = document.getElementById("edit-field-modal");
-    if (!modal) return;
-    
-    // 填充表单
-    document.getElementById("edit-field-id").value = field.id;
-    document.getElementById("edit-field-tag").value = field.tag;
-    document.getElementById("edit-field-label").value = field.label;
-    document.getElementById("edit-field-type").value = field.type;
-    
-    // 选项
-    const optionsGroup = document.getElementById("edit-options-group");
-    const optionsTextarea = document.getElementById("edit-field-options");
-    if (field.type === "select" || field.type === "radio") {
-        optionsGroup.style.display = "block";
-        optionsTextarea.value = (field.options || []).join("\n");
-    } else {
-        optionsGroup.style.display = "none";
-        optionsTextarea.value = "";
-    }
-    
-    modal.classList.add("show");
-}
-
-/**
- * 隐藏编辑字段弹窗
- */
-function hideEditFieldModal() {
-    const modal = document.getElementById("edit-field-modal");
-    if (modal) {
-        modal.classList.remove("show");
-    }
-    editingFieldId = null;
-}
-
-/**
- * 保存编辑的字段
- */
-function saveEditedField() {
-    if (!editingFieldId) return;
-    
-    const field = customFields.find(f => f.id === editingFieldId);
-    if (!field) return;
-    
-    const newLabel = document.getElementById("edit-field-label").value.trim();
-    const newType = document.getElementById("edit-field-type").value;
-    const optionsText = document.getElementById("edit-field-options").value.trim();
-    
-    if (!newLabel) {
-        showNotification("请输入字段名称", "error");
-        return;
-    }
-    
-    // 更新字段
-    field.label = newLabel;
-    field.type = newType;
-    
-    // 更新选项
-    if (newType === "select" || newType === "radio") {
-        field.options = optionsText.split("\n").map(s => s.trim()).filter(s => s);
-        if (field.options.length === 0) {
-            showNotification("请输入至少一个选项", "error");
-            return;
-        }
-    } else {
-        field.options = [];
-    }
-    
-    saveCustomFields();
-    
-    // 如果字段已放置，重新渲染
-    if (field.position) {
-        renderCustomFieldInForm(field, field.position.afterHeaderId, field.position.afterElementId);
-    }
-    
-    // 更新底部面板
-    renderCustomFieldsPanel();
-    
-    hideEditFieldModal();
-    showNotification(`已更新字段: ${field.label}`, "success");
-}
-
-/**
- * 从编辑弹窗删除字段
- */
-function deleteFieldFromEditModal() {
-    if (!editingFieldId) return;
-    
-    const field = customFields.find(f => f.id === editingFieldId);
-    if (!field) return;
-    
-    hideEditFieldModal();
-    deleteCustomField(editingFieldId);
-}
-
-/**
- * 将已放置的字段移回底部面板
- */
-function unplaceField(fieldId) {
-    const field = customFields.find(f => f.id === fieldId);
-    if (!field) return;
-    
-    // 清除位置
-    field.position = null;
-    saveCustomFields();
-    
-    // 从表单移除
-    removeCustomFieldFromForm(fieldId);
-    
-    // 更新底部面板
-    renderCustomFieldsPanel();
-    
-    showNotification(`已将 "${field.label}" 移回自定义字段面板`, "info");
-}
-
-/**
- * 导出自定义字段配置
- */
-function exportCustomFields() {
-    if (customFields.length === 0) {
-        showNotification("没有可导出的自定义字段", "warning");
-        return;
-    }
-    
-    const data = JSON.stringify(customFields, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `custom-fields-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    
-    URL.revokeObjectURL(url);
-    showNotification("配置已导出", "success");
-}
-
-/**
- * 导入自定义字段配置
- */
-function importCustomFields(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const imported = JSON.parse(e.target.result);
-            if (!Array.isArray(imported)) {
-                throw new Error("无效的配置格式");
-            }
-            
-            // 合并导入的字段（避免重复 tag）
-            let addedCount = 0;
-            imported.forEach(field => {
-                if (!customFields.some(f => f.tag === field.tag)) {
-                    // 生成新 ID
-                    field.id = "cf_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-                    customFields.push(field);
-                    addedCount++;
-                }
-            });
-            
-            saveCustomFields();
-            renderCustomFieldsPanel();
-            renderAllCustomFieldsInForm();
-            
-            showNotification(`已导入 ${addedCount} 个字段`, "success");
-        } catch (err) {
-            showNotification("导入失败: " + err.message, "error");
-        }
-    };
-    reader.readAsText(file);
-}
-
-/**
- * 初始化自定义字段管理器
+ * 初始化字段管理器（统一版本）
  */
 function initCustomFieldsManager() {
-    console.log("[CustomFields] 初始化自定义字段管理器...");
+    console.log("[FieldManager] 初始化字段管理器...");
     
-    // 加载已保存的自定义字段
-    loadCustomFields();
+    // 加载待放置字段
+    loadPendingFields();
     
-    // 渲染底部面板
+    // 渲染底部面板（显示待放置字段卡片）
     renderCustomFieldsPanel();
-    
-    // 渲染已放置的自定义字段到表单
-    setTimeout(renderAllCustomFieldsInForm, 100);
     
     // FAB 按钮点击 - 切换底部面板
     const fab = document.getElementById("custom-field-fab");
@@ -6350,8 +6766,16 @@ function initCustomFieldsManager() {
                 optionsGroup.style.display = "block";
             } else {
                 optionsGroup.style.display = "none";
+                // 清空选项
+                resetAddOptions();
             }
         });
+    }
+    
+    // 添加选项按钮事件
+    const addOptionBtn = document.getElementById("add-option-btn");
+    if (addOptionBtn) {
+        addOptionBtn.addEventListener("click", () => showAddOptionModal('add'));
     }
     
     // 插入模式选择
