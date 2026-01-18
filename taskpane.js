@@ -2891,19 +2891,33 @@ async function autoCreateContentControls() {
                 
                 // 提取占位符名称（去掉【】）
                 const fullText = range.text;
-                const name = fullText.replace(/^【/, "").replace(/】$/, "").trim();
+                const chineseName = fullText.replace(/^【/, "").replace(/】$/, "").trim();
                 
-                if (!name) {
+                if (!chineseName) {
                     console.log(`[AutoEmbed] 跳过空占位符: ${fullText}`);
                     skippedCount++;
                     continue;
                 }
                 
+                // 将中文转换为驼峰拼音作为 tag
+                // 使用 pinyin-pro 库
+                let pinyinTag = chineseName;
+                try {
+                    if (typeof pinyinPro !== 'undefined' && pinyinPro.pinyin) {
+                        // 获取拼音数组，每个字一个拼音
+                        const pinyinArr = pinyinPro.pinyin(chineseName, { toneType: 'none', type: 'array' });
+                        // 转换为驼峰格式：每个拼音首字母大写
+                        pinyinTag = pinyinArr.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('');
+                    }
+                } catch (e) {
+                    console.warn(`[AutoEmbed] 拼音转换失败，使用原文: ${chineseName}`, e);
+                }
+                
                 // 创建 Content Control
                 try {
                     const cc = range.insertContentControl("RichText");
-                    cc.tag = name;  // tag 就是占位符名称
-                    cc.title = name; // title 也是占位符名称
+                    cc.tag = pinyinTag;  // tag 使用驼峰拼音，如 "MuBiaoGongSiMingCheng"
+                    cc.title = chineseName; // title 保持中文，如 "目标公司名称"
                     cc.appearance = "BoundingBox";
                     cc.color = "blue";
                     cc.cannotEdit = false;
@@ -2911,9 +2925,9 @@ async function autoCreateContentControls() {
                     
                     await context.sync();
                     successCount++;
-                    console.log(`[AutoEmbed] ✓ 成功埋点: ${name}`);
+                    console.log(`[AutoEmbed] ✓ 成功埋点: ${chineseName} → tag="${pinyinTag}"`);
                 } catch (err) {
-                    console.warn(`[AutoEmbed] 埋点失败 (${name}):`, err.message);
+                    console.warn(`[AutoEmbed] 埋点失败 (${chineseName}):`, err.message);
                     skippedCount++;
                 }
             }
