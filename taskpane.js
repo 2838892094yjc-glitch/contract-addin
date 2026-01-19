@@ -3094,9 +3094,37 @@ ${documentText}
         const result = await response.json();
         console.log("[AI] API 响应:", result);
         
+        // #region agent log H1-H4
+        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3096',message:'API result structure',data:{hasOutput:!!result.output,outputIsArray:Array.isArray(result.output),outputLength:result.output?.length,outputTypes:result.output?.map(o=>o.type)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+        
         // 解析响应内容
         let outputText = "";
-        if (result.output && result.output.content) {
+        if (result.output && Array.isArray(result.output)) {
+            // #region agent log H2
+            fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3104',message:'output is array',data:{length:result.output.length,items:result.output.map((o,i)=>({index:i,type:o.type,hasContent:!!o.content}))},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
+            // #endregion
+            
+            // 豆包 API 返回 output 是数组，找 type: "message"
+            const messageObj = result.output.find(o => o.type === 'message');
+            
+            // #region agent log H3
+            fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3110',message:'found message object',data:{found:!!messageObj,hasContent:!!messageObj?.content,contentIsArray:Array.isArray(messageObj?.content),contentLength:messageObj?.content?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+            // #endregion
+            
+            if (messageObj && Array.isArray(messageObj.content)) {
+                // content 是数组，提取文本
+                const textContent = messageObj.content.find(c => c.type === 'text' || c.text);
+                
+                // #region agent log H4
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3118',message:'extracted text content',data:{found:!!textContent,hasText:!!textContent?.text,textLength:textContent?.text?.length,textPreview:textContent?.text?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
+                // #endregion
+                
+                if (textContent && textContent.text) {
+                    outputText = textContent.text;
+                }
+            }
+        } else if (result.output && result.output.content) {
             outputText = result.output.content;
         } else if (result.choices && result.choices[0] && result.choices[0].message) {
             outputText = result.choices[0].message.content;
@@ -3106,6 +3134,10 @@ ${documentText}
             // 尝试查找 output 字段
             outputText = JSON.stringify(result);
         }
+        
+        // #region agent log H5
+        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3140',message:'final outputText',data:{length:outputText.length,startsWithBracket:outputText.trim().startsWith('['),preview:outputText.substring(0,300)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+        // #endregion
         
         console.log("[AI] 原始输出:", outputText);
         
