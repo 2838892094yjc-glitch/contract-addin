@@ -4096,16 +4096,32 @@ async function aiRecognizeCore() {
                             console.log(`[DEBUG-H5] 处理匹配项 ${i}/${maxMatches}, range存在=${!!range}`);
                             // #endregion
                             try {
+                                // #region agent log
+                                console.log(`[DEBUG-H6] 准备加载 range 属性, i=${i}`);
+                                // #endregion
                                 range.load("text, parentContentControlOrNullObject");
                                 await context.sync();
                                 // #region agent log
                                 console.log(`[DEBUG-H5] 匹配项 ${i} 加载成功, text="${range.text?.substring(0,30)}"`);
                                 // #endregion
                                 
+                                // #region agent log
+                                console.log(`[DEBUG-H6] 准备加载 parentCC 属性`);
+                                // #endregion
+                                
                                 // 检查是否已有埋点
                                 const parentCC = range.parentContentControlOrNullObject;
+                                // #region agent log
+                                console.log(`[DEBUG-H6] parentCC 对象存在: ${!!parentCC}`);
+                                // #endregion
                                 parentCC.load("isNullObject, tag, title, color");
+                                // #region agent log
+                                console.log(`[DEBUG-H6] 准备 sync parentCC 属性...`);
+                                // #endregion
                                 await context.sync();
+                                // #region agent log
+                                console.log(`[DEBUG-H6] parentCC sync 完成, isNullObject=${parentCC.isNullObject}`);
+                                // #endregion
                                 
                                 if (!parentCC.isNullObject) {
                                     // 已有埋点，检查是否需要修正
@@ -4192,13 +4208,22 @@ async function aiRecognizeCore() {
                                 }
                                 
                                 // 创建 Content Control（所有同义词共享同一个 tag）
+                                // #region agent log
+                                console.log(`[DEBUG-H6] 准备创建新 CC, tag=${pinyinTag}`);
+                                // #endregion
                                 const cc = range.insertContentControl("RichText");
                                 cc.tag = pinyinTag;
                                 cc.title = title;
                                 cc.appearance = "Tags"; // Tags 模式显示 title 标签
                                 cc.color = color;
                                 
+                                // #region agent log
+                                console.log(`[DEBUG-H6] CC 属性已设置, 准备 sync...`);
+                                // #endregion
                                 await context.sync();
+                                // #region agent log
+                                console.log(`[DEBUG-H6] ✓ CC 创建成功`);
+                                // #endregion
                                 embedCount++;
                             } catch (rangeErr) {
                                 // 单个匹配项失败，继续处理下一个
