@@ -3356,21 +3356,11 @@ function renderAIFieldsInForm(aiFields) {
         grouped[f.sectionId].push(f);
     });
     
-    // #region agent log H1-H3: 表单容器调试
-    const allSectionIds = Array.from(document.querySelectorAll('[data-section-id]')).map(el => el.getAttribute('data-section-id'));
-    const dynContainer = document.getElementById('dynamic-form-container');
-    fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3360',message:'form containers check',data:{allSectionIdsInDOM:allSectionIds,dynamicContainerExists:!!dynContainer,groupedSectionIds:Object.keys(grouped)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
-    
-    // 为每个 section 添加 AI 字段
+    // 为每个 section 添加 AI 字段（直接混入，不创建单独区域）
     for (const [sectionId, fields] of Object.entries(grouped)) {
         // 查找对应的 section 容器
         const sectionHeader = document.querySelector(`[data-section-id="${sectionId}"]`);
         let targetContainer = null;
-        
-        // #region agent log H2: section 查找
-        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3374',message:'section lookup',data:{sectionId,headerFound:!!sectionHeader,fieldsCount:fields.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-        // #endregion
         
         if (sectionHeader) {
             // 找到 section 的字段容器
@@ -3382,39 +3372,16 @@ function renderAIFieldsInForm(aiFields) {
             targetContainer = document.getElementById('dynamic-form-container');
         }
         
-        // #region agent log H3: 容器选择结果
-        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3388',message:'container result',data:{sectionId,targetContainerFound:!!targetContainer,targetContainerId:targetContainer?.id,targetContainerClass:targetContainer?.className},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
-        
         if (!targetContainer) continue;
-        
-        // 创建 AI 字段区域
-        const aiContainer = document.createElement('div');
-        aiContainer.className = 'ai-fields-section';
-        aiContainer.innerHTML = `
-            <div class="ai-section-header" style="
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                padding: 8px 0;
-                margin-top: 12px;
-                border-top: 1px dashed #6366f1;
-                color: #6366f1;
-                font-size: 12px;
-            ">
-                <i class="ms-Icon ms-Icon--Robot"></i>
-                <span>AI 识别的字段</span>
-            </div>
-        `;
         
         // 分离父级和子级字段
         const parentFields = fields.filter(f => !f.parentTag);
         const childFields = fields.filter(f => f.parentTag);
         
-        // 先渲染父级字段
+        // 直接将 AI 字段插入到 section 中（不创建单独区域）
         parentFields.forEach(field => {
             const wrapper = createAIFieldElement(field);
-            aiContainer.appendChild(wrapper);
+            targetContainer.appendChild(wrapper);
             
             // 如果有子字段，渲染它们（缩进）
             const childrenOfThis = childFields.filter(c => 
@@ -3422,11 +3389,11 @@ function renderAIFieldsInForm(aiFields) {
             );
             childrenOfThis.forEach(child => {
                 const childWrapper = createAIFieldElement(child, true);
-                aiContainer.appendChild(childWrapper);
+                targetContainer.appendChild(childWrapper);
             });
         });
         
-        // 渲染没有父级的子字段（可能 AI 识别有误）
+        // 渲染没有父级的子字段
         const orphanChildren = childFields.filter(c => {
             const hasParent = parentFields.some(p => 
                 generatePinyinTag(p.label) === c.parentTag
@@ -3435,10 +3402,8 @@ function renderAIFieldsInForm(aiFields) {
         });
         orphanChildren.forEach(child => {
             const wrapper = createAIFieldElement(child);
-            aiContainer.appendChild(wrapper);
+            targetContainer.appendChild(wrapper);
         });
-        
-        targetContainer.appendChild(aiContainer);
     }
     
     console.log("[AI Form] 渲染完成");
