@@ -4036,17 +4036,18 @@ async function aiRecognizeCore() {
                                 
                                 if (!parentCC.isNullObject) {
                                     // 已有埋点，检查是否需要修正
-                                    const needsUpdate = (
-                                        parentCC.tag !== pinyinTag ||
-                                        parentCC.title !== title ||
-                                        parentCC.color !== color
-                                    );
+                                    // 注意：颜色比对忽略大小写（#3B82F6 和 #3b82f6 是同一个颜色）
+                                    const tagMatch = parentCC.tag === pinyinTag;
+                                    const titleMatch = parentCC.title === title;
+                                    const colorMatch = (parentCC.color || '').toLowerCase() === (color || '').toLowerCase();
+                                    
+                                    const needsUpdate = !tagMatch || !titleMatch;
+                                    // 如果只是颜色大小写不同，不需要更新
                                     
                                     if (needsUpdate) {
                                         console.log(`[AI Core] 检测到不一致，重新埋点: "${searchText}"`);
-                                        console.log(`  - 旧tag: ${parentCC.tag}, 新tag: ${pinyinTag}`);
-                                        console.log(`  - 旧title: ${parentCC.title}, 新title: ${title}`);
-                                        console.log(`  - 旧color: ${parentCC.color}, 新color: ${color}`);
+                                        console.log(`  - tag: ${parentCC.tag} → ${pinyinTag} (${tagMatch ? '✓' : '✗'})`);
+                                        console.log(`  - title: ${parentCC.title} → ${title} (${titleMatch ? '✓' : '✗'})`);
                                         
                                         try {
                                             // 删除旧的 Content Control（保留文本）
