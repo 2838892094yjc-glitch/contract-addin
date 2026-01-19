@@ -3251,6 +3251,105 @@ function deduplicateVariables(variables) {
 }
 
 /**
+ * 内置常用汉字拼音映射表
+ * 覆盖合同文档中最常见的汉字，提供可读的拼音 tag
+ */
+const PINYIN_MAP = {
+    // 合同基础词汇
+    '合': 'He', '同': 'Tong', '协': 'Xie', '议': 'Yi', '约': 'Yue', '定': 'Ding',
+    '编': 'Bian', '号': 'Hao', '码': 'Ma', '签': 'Qian', '署': 'Shu', '订': 'Ding',
+    '条': 'Tiao', '款': 'Kuan', '项': 'Xiang', '章': 'Zhang', '节': 'Jie', '附': 'Fu',
+    '件': 'Jian', '录': 'Lu', '表': 'Biao', '单': 'Dan', '书': 'Shu', '证': 'Zheng',
+    
+    // 公司组织
+    '公': 'Gong', '司': 'Si', '企': 'Qi', '业': 'Ye', '法': 'Fa', '人': 'Ren',
+    '股': 'Gu', '东': 'Dong', '投': 'Tou', '资': 'Zi', '方': 'Fang', '代': 'Dai',
+    '表': 'Biao', '理': 'Li', '机': 'Ji', '构': 'Gou', '组': 'Zu', '织': 'Zhi',
+    '团': 'Tuan', '队': 'Dui', '部': 'Bu', '门': 'Men', '员': 'Yuan', '工': 'Gong',
+    
+    // 甲乙方及身份
+    '甲': 'Jia', '乙': 'Yi', '丙': 'Bing', '丁': 'Ding', '委': 'Wei', '托': 'Tuo',
+    '受': 'Shou', '授': 'Shou', '权': 'Quan', '负': 'Fu', '责': 'Ze', '主': 'Zhu',
+    '管': 'Guan', '联': 'Lian', '系': 'Xi', '接': 'Jie', '收': 'Shou', '发': 'Fa',
+    
+    // 名称标识
+    '名': 'Ming', '称': 'Cheng', '姓': 'Xing', '字': 'Zi', '号': 'Hao', '标': 'Biao',
+    '题': 'Ti', '目': 'Mu', '品': 'Pin', '牌': 'Pai', '型': 'Xing', '式': 'Shi',
+    
+    // 地址位置
+    '地': 'Di', '址': 'Zhi', '省': 'Sheng', '市': 'Shi', '区': 'Qu', '县': 'Xian',
+    '街': 'Jie', '道': 'Dao', '路': 'Lu', '巷': 'Xiang', '弄': 'Long', '楼': 'Lou',
+    '室': 'Shi', '所': 'Suo', '在': 'Zai', '处': 'Chu', '场': 'Chang', '位': 'Wei',
+    
+    // 联系方式
+    '电': 'Dian', '话': 'Hua', '手': 'Shou', '机': 'Ji', '邮': 'You', '箱': 'Xiang',
+    '网': 'Wang', '站': 'Zhan', '传': 'Chuan', '真': 'Zhen', '码': 'Ma', '信': 'Xin',
+    
+    // 金额财务
+    '金': 'Jin', '额': 'E', '价': 'Jia', '格': 'Ge', '费': 'Fei', '用': 'Yong',
+    '款': 'Kuan', '币': 'Bi', '元': 'Yuan', '角': 'Jiao', '分': 'Fen', '钱': 'Qian',
+    '本': 'Ben', '息': 'Xi', '率': 'Lv', '税': 'Shui', '账': 'Zhang', '户': 'Hu',
+    '行': 'Hang', '银': 'Yin', '支': 'Zhi', '付': 'Fu', '收': 'Shou', '入': 'Ru',
+    '出': 'Chu', '转': 'Zhuan', '汇': 'Hui', '票': 'Piao', '据': 'Ju', '证': 'Zheng',
+    
+    // 日期时间
+    '年': 'Nian', '月': 'Yue', '日': 'Ri', '时': 'Shi', '分': 'Fen', '秒': 'Miao',
+    '期': 'Qi', '限': 'Xian', '间': 'Jian', '前': 'Qian', '后': 'Hou', '始': 'Shi',
+    '终': 'Zhong', '止': 'Zhi', '内': 'Nei', '外': 'Wai', '至': 'Zhi', '到': 'Dao',
+    
+    // 数字量词
+    '一': 'Yi', '二': 'Er', '三': 'San', '四': 'Si', '五': 'Wu',
+    '六': 'Liu', '七': 'Qi', '八': 'Ba', '九': 'Jiu', '十': 'Shi',
+    '百': 'Bai', '千': 'Qian', '万': 'Wan', '亿': 'Yi', '零': 'Ling',
+    '个': 'Ge', '张': 'Zhang', '份': 'Fen', '件': 'Jian', '次': 'Ci',
+    '批': 'Pi', '套': 'Tao', '组': 'Zu', '双': 'Shuang', '对': 'Dui',
+    
+    // 产品服务
+    '产': 'Chan', '品': 'Pin', '货': 'Huo', '物': 'Wu', '服': 'Fu', '务': 'Wu',
+    '项': 'Xiang', '目': 'Mu', '工': 'Gong', '程': 'Cheng', '作': 'Zuo', '业': 'Ye',
+    '任': 'Ren', '务': 'Wu', '内': 'Nei', '容': 'Rong', '范': 'Fan', '围': 'Wei',
+    
+    // 质量标准
+    '质': 'Zhi', '量': 'Liang', '标': 'Biao', '准': 'Zhun', '规': 'Gui', '格': 'Ge',
+    '检': 'Jian', '验': 'Yan', '测': 'Ce', '试': 'Shi', '认': 'Ren', '证': 'Zheng',
+    '合': 'He', '格': 'Ge', '良': 'Liang', '好': 'Hao', '优': 'You', '秀': 'Xiu',
+    
+    // 交付履行
+    '交': 'Jiao', '付': 'Fu', '货': 'Huo', '运': 'Yun', '输': 'Shu', '送': 'Song',
+    '提': 'Ti', '取': 'Qu', '履': 'Lv', '行': 'Xing', '完': 'Wan', '成': 'Cheng',
+    '验': 'Yan', '收': 'Shou', '确': 'Que', '认': 'Ren', '批': 'Pi', '准': 'Zhun',
+    
+    // 权利义务
+    '权': 'Quan', '利': 'Li', '义': 'Yi', '务': 'Wu', '责': 'Ze', '任': 'Ren',
+    '享': 'Xiang', '有': 'You', '承': 'Cheng', '担': 'Dan', '保': 'Bao', '证': 'Zheng',
+    '赔': 'Pei', '偿': 'Chang', '损': 'Sun', '失': 'Shi', '害': 'Hai', '违': 'Wei',
+    
+    // 变更终止
+    '变': 'Bian', '更': 'Geng', '修': 'Xiu', '改': 'Gai', '补': 'Bu', '充': 'Chong',
+    '终': 'Zhong', '止': 'Zhi', '解': 'Jie', '除': 'Chu', '续': 'Xu', '延': 'Yan',
+    '期': 'Qi', '满': 'Man', '届': 'Jie', '到': 'Dao', '废': 'Fei', '销': 'Xiao',
+    
+    // 争议解决
+    '争': 'Zheng', '议': 'Yi', '纠': 'Jiu', '纷': 'Fen', '仲': 'Zhong', '裁': 'Cai',
+    '诉': 'Su', '讼': 'Song', '调': 'Tiao', '解': 'Jie', '协': 'Xie', '商': 'Shang',
+    
+    // 保密知识产权
+    '密': 'Mi', '秘': 'Mi', '知': 'Zhi', '识': 'Shi', '专': 'Zhuan', '利': 'Li',
+    '技': 'Ji', '术': 'Shu', '商': 'Shang', '标': 'Biao', '版': 'Ban', '著': 'Zhu',
+    
+    // 其他常用字
+    '的': 'De', '和': 'He', '与': 'Yu', '及': 'Ji', '或': 'Huo', '者': 'Zhe',
+    '为': 'Wei', '由': 'You', '从': 'Cong', '按': 'An', '照': 'Zhao', '依': 'Yi',
+    '据': 'Ju', '根': 'Gen', '基': 'Ji', '于': 'Yu', '关': 'Guan', '于': 'Yu',
+    '对': 'Dui', '向': 'Xiang', '经': 'Jing', '过': 'Guo', '通': 'Tong', '知': 'Zhi',
+    '报': 'Bao', '告': 'Gao', '说': 'Shuo', '明': 'Ming', '示': 'Shi', '意': 'Yi',
+    '见': 'Jian', '求': 'Qiu', '需': 'Xu', '要': 'Yao', '应': 'Ying', '该': 'Gai',
+    '须': 'Xu', '必': 'Bi', '可': 'Ke', '能': 'Neng', '得': 'De', '将': 'Jiang',
+    '被': 'Bei', '给': 'Gei', '让': 'Rang', '使': 'Shi', '令': 'Ling', '使': 'Shi',
+    '原': 'Yuan', '料': 'Liao', '材': 'Cai', '包': 'Bao', '装': 'Zhuang', '箱': 'Xiang'
+};
+
+/**
  * 简单哈希函数：将字符串转换为唯一的 ASCII 标识符
  * 使用 djb2 算法变体，生成可读的字母数字组合
  */
@@ -3266,8 +3365,38 @@ function simpleHash(str) {
 }
 
 /**
+ * 使用内置映射表将汉字转换为拼音
+ * 对于映射表中没有的字符，使用哈希
+ */
+function chineseToPinyinWithMap(text) {
+    let result = '';
+    let unknownChars = '';
+    
+    for (let char of text) {
+        if (PINYIN_MAP[char]) {
+            result += PINYIN_MAP[char];
+        } else if (/[a-zA-Z0-9]/.test(char)) {
+            // 保留英文数字
+            result += char.toUpperCase();
+        } else if (/[\u4e00-\u9fa5]/.test(char)) {
+            // 中文字符但不在映射表中
+            unknownChars += char;
+        }
+        // 其他字符（空格、符号等）忽略
+    }
+    
+    // 如果有未知字符，用哈希补充
+    if (unknownChars) {
+        const hash = simpleHash(unknownChars);
+        result += '_' + hash;
+    }
+    
+    return result || `field_${simpleHash(text)}`;
+}
+
+/**
  * 生成拼音 tag（PascalCase）
- * 当 pinyin-pro 不可用时，使用 ASCII-only 哈希作为降级方案
+ * 优先级：1. pinyin-pro CDN  2. 内置映射表  3. ASCII 哈希
  */
 function generatePinyinTag(label) {
     // 尝试多种可能的全局变量名
@@ -3277,37 +3406,28 @@ function generatePinyinTag(label) {
     else if (typeof pinyin !== 'undefined') pinyinLib = pinyin;
     else if (typeof window !== 'undefined' && typeof window.pinyin !== 'undefined') pinyinLib = window.pinyin;
     
-    console.log(`[PinyinTag] 输入: "${label}", pinyinLib可用: ${!!pinyinLib}`);
-    
-    if (!pinyinLib) {
-        // 降级方案：使用 ASCII-only 哈希
-        // 生成格式: field_<hash> 确保完全 ASCII 兼容
-        const hash = simpleHash(label);
-        const fallback = `field_${hash}`;
-        console.log(`[PinyinTag] 使用 ASCII 哈希降级: "${label}" -> "${fallback}"`);
-        return fallback;
+    // 方案 1: 使用 pinyin-pro（如果可用）
+    if (pinyinLib) {
+        try {
+            const pinyinFunc = pinyinLib.pinyin || pinyinLib;
+            const pinyinResult = pinyinFunc(label, { toneType: 'none', type: 'array' });
+            
+            // 将每个字的拼音首字母大写并连接
+            const result = (Array.isArray(pinyinResult) ? pinyinResult : pinyinResult.split(' '))
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                .join('');
+            
+            console.log(`[PinyinTag] CDN转换: "${label}" -> "${result}"`);
+            return result;
+        } catch (e) {
+            console.warn(`[PinyinTag] CDN转换失败，使用内置映射:`, e.message);
+        }
     }
     
-    try {
-        // pinyin-pro 的 API: pinyinPro.pinyin(text, options)
-        const pinyinFunc = pinyinLib.pinyin || pinyinLib;
-        const pinyinResult = pinyinFunc(label, { toneType: 'none', type: 'array' });
-        
-        // 将每个字的拼音首字母大写并连接
-        const result = (Array.isArray(pinyinResult) ? pinyinResult : pinyinResult.split(' '))
-            .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-            .join('');
-        
-        console.log(`[PinyinTag] 拼音转换: "${label}" -> "${result}"`);
-        return result;
-    } catch (e) {
-        console.error(`[PinyinTag] 拼音转换失败:`, e);
-        // 异常时也使用 ASCII-only 哈希
-        const hash = simpleHash(label);
-        const fallback = `field_${hash}`;
-        console.log(`[PinyinTag] 异常降级: "${label}" -> "${fallback}"`);
-        return fallback;
-    }
+    // 方案 2: 使用内置映射表
+    const mapResult = chineseToPinyinWithMap(label);
+    console.log(`[PinyinTag] 映射表转换: "${label}" -> "${mapResult}"`);
+    return mapResult;
 }
 
 /**
@@ -4367,10 +4487,14 @@ async function autoGenerateForm() {
         autoGeneratedTags = afterTags.filter(t => !beforeTags.includes(t));
         console.log(`[AutoGenerate] 新增埋点: ${autoGeneratedTags.length} 个`);
         
-        // Step 5: 显示撤销按钮
+        // Step 5: 显示撤销按钮（只要有埋点就显示，支持撤销所有或仅本次）
         const undoBtn = document.getElementById('btn-undo-embed');
-        if (undoBtn && autoGeneratedTags.length > 0) {
+        if (undoBtn && afterTags.length > 0) {
             undoBtn.style.display = 'block';
+            // 更新按钮文本显示可撤销的数量
+            undoBtn.title = autoGeneratedTags.length > 0 
+                ? `撤销本次新增的 ${autoGeneratedTags.length} 个埋点，或撤销所有 ${afterTags.length} 个埋点`
+                : `撤销所有 ${afterTags.length} 个埋点`;
         }
         
         // 完成通知
@@ -4388,15 +4512,60 @@ async function autoGenerateForm() {
 
 /**
  * 撤销自动埋点
- * 删除本次生成创建的所有 Content Control，保留文本内容
+ * 支持撤销本次新增的埋点或所有埋点
  */
 async function undoAutoEmbed() {
     const btn = document.getElementById('btn-undo-embed');
     if (!btn) return;
     
-    if (autoGeneratedTags.length === 0) {
-        showNotification("没有可撤销的埋点", "info");
+    // 获取当前所有埋点
+    let allTags = [];
+    try {
+        allTags = await getAllContentControlTags();
+    } catch (e) {
+        console.error("[Undo] 获取埋点失败:", e);
+        showNotification("获取埋点失败", "error");
+        return;
+    }
+    
+    if (allTags.length === 0) {
+        showNotification("文档中没有埋点", "info");
         btn.style.display = 'none';
+        return;
+    }
+    
+    // 确定撤销范围
+    let tagsToDelete = [];
+    let undoType = 'all'; // 'new' 或 'all'
+    
+    if (autoGeneratedTags.length > 0 && autoGeneratedTags.length < allTags.length) {
+        // 有本次新增的埋点，且不是全部 - 询问用户
+        const msg = `选择撤销范围：\n\n` +
+                    `• 仅撤销本次新增: ${autoGeneratedTags.length} 个埋点\n` +
+                    `• 撤销所有埋点: ${allTags.length} 个埋点\n\n` +
+                    `点击「确定」撤销本次新增，点击「取消」撤销所有埋点`;
+        
+        const undoOnlyNew = await showConfirmDialog(msg, {
+            title: "选择撤销范围",
+            confirmText: "仅本次新增",
+            cancelText: "撤销所有"
+        });
+        
+        if (undoOnlyNew) {
+            tagsToDelete = autoGeneratedTags;
+            undoType = 'new';
+        } else {
+            tagsToDelete = allTags;
+            undoType = 'all';
+        }
+    } else {
+        // 没有新增记录或全部都是新增的 - 直接撤销所有
+        tagsToDelete = allTags;
+        undoType = 'all';
+    }
+    
+    if (tagsToDelete.length === 0) {
+        showNotification("没有可撤销的埋点", "info");
         return;
     }
     
@@ -4418,9 +4587,9 @@ async function undoAutoEmbed() {
             }
             await context.sync();
             
-            // 删除本次创建的 Content Control
+            // 删除指定的 Content Control
             for (const cc of ccs.items) {
-                if (autoGeneratedTags.includes(cc.tag)) {
+                if (tagsToDelete.includes(cc.tag)) {
                     cc.delete(false); // false = 保留内容，只删除控件
                     deletedCount++;
                 }
@@ -4428,23 +4597,35 @@ async function undoAutoEmbed() {
             await context.sync();
         });
         
-        // 清除 AI 表单项
-        document.querySelectorAll('.ai-field-wrapper').forEach(el => el.remove());
-        document.querySelectorAll('.ai-fields-section').forEach(el => el.remove());
-        
-        // 清除存储的 AI 字段
-        try {
-            await saveAIFieldsToDocument([]);
-        } catch (e) {
-            console.warn("[Undo] 清除 AI 字段存储失败:", e);
+        // 清除 AI 表单项（如果撤销所有）
+        if (undoType === 'all') {
+            document.querySelectorAll('.ai-field-wrapper').forEach(el => el.remove());
+            document.querySelectorAll('.ai-fields-section').forEach(el => el.remove());
+            
+            // 清除存储的 AI 字段
+            try {
+                await saveAIFieldsToDocument([]);
+            } catch (e) {
+                console.warn("[Undo] 清除 AI 字段存储失败:", e);
+            }
         }
         
-        // 隐藏撤销按钮
-        btn.style.display = 'none';
-        autoGeneratedTags = [];
+        // 更新状态
+        if (undoType === 'all' || deletedCount === autoGeneratedTags.length) {
+            // 如果撤销了所有埋点或本次所有新增，隐藏按钮
+            btn.style.display = 'none';
+            autoGeneratedTags = [];
+        } else {
+            // 否则更新 autoGeneratedTags
+            autoGeneratedTags = autoGeneratedTags.filter(t => !tagsToDelete.includes(t));
+        }
         
-        showNotification(`已撤销 ${deletedCount} 个埋点`, "success");
-        console.log(`[Undo] 撤销完成: 删除 ${deletedCount} 个埋点`);
+        const typeText = undoType === 'new' ? '本次新增的' : '所有';
+        showNotification(`已撤销${typeText} ${deletedCount} 个埋点`, "success");
+        console.log(`[Undo] 撤销完成: 删除${typeText} ${deletedCount} 个埋点`);
+        
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
         
     } catch (error) {
         console.error("[Undo] 撤销失败:", error);
