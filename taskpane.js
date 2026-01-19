@@ -3113,11 +3113,15 @@ ${documentText}
             // #endregion
             
             if (messageObj && Array.isArray(messageObj.content)) {
-                // content 是数组，提取文本
-                const textContent = messageObj.content.find(c => c.type === 'text' || c.text);
+                // #region agent log H4a - content 结构详情
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3116',message:'content array details',data:{contentLength:messageObj.content.length,contentTypes:messageObj.content.map(c=>c.type),contentKeys:messageObj.content.map(c=>Object.keys(c)),firstItem:JSON.stringify(messageObj.content[0]).substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4a'})}).catch(()=>{});
+                // #endregion
                 
-                // #region agent log H4
-                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3118',message:'extracted text content',data:{found:!!textContent,hasText:!!textContent?.text,textLength:textContent?.text?.length,textPreview:textContent?.text?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
+                // content 是数组，提取文本 - 支持多种类型格式
+                let textContent = messageObj.content.find(c => c.type === 'text' || c.type === 'output_text');
+                
+                // #region agent log H4b
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3123',message:'textContent search result',data:{found:!!textContent,type:textContent?.type,hasText:!!textContent?.text,textPreview:textContent?.text?.substring(0,300)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4b'})}).catch(()=>{});
                 // #endregion
                 
                 if (textContent && textContent.text) {
