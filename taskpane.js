@@ -3891,11 +3891,56 @@ async function aiRecognizeCore() {
                                 
                                 // 检查是否已有埋点
                                 const parentCC = range.parentContentControlOrNullObject;
-                                parentCC.load("isNullObject");
+                                parentCC.load("isNullObject, tag, title, color");
                                 await context.sync();
                                 
                                 if (!parentCC.isNullObject) {
-                                    console.log(`[AI Core] 跳过已埋点: "${searchText}"`);
+                                    // 已有埋点，检查是否需要修正
+                                    const needsUpdate = (
+                                        parentCC.tag !== pinyinTag ||
+                                        parentCC.title !== title ||
+                                        parentCC.color !== color
+                                    );
+                                    
+                                    if (needsUpdate) {
+                                        console.log(`[AI Core] 检测到不一致，重新埋点: "${searchText}"`);
+                                        console.log(`  - 旧tag: ${parentCC.tag}, 新tag: ${pinyinTag}`);
+                                        console.log(`  - 旧title: ${parentCC.title}, 新title: ${title}`);
+                                        console.log(`  - 旧color: ${parentCC.color}, 新color: ${color}`);
+                                        
+                                        try {
+                                            // 删除旧的 Content Control（保留文本）
+                                            parentCC.delete(false);
+                                            await context.sync();
+                                            
+                                            // 重新搜索该位置
+                                            const reSearch = context.document.body.search(searchText, { 
+                                                matchCase: false,
+                                                matchWholeWord: false 
+                                            });
+                                            reSearch.load("items");
+                                            await context.sync();
+                                            
+                                            if (reSearch.items.length > 0) {
+                                                // 找到对应位置，创建新的 Content Control
+                                                const newRange = reSearch.items[Math.min(i, reSearch.items.length - 1)];
+                                                const newCC = newRange.insertContentControl("RichText");
+                                                newCC.tag = pinyinTag;
+                                                newCC.title = title;
+                                                newCC.appearance = "BoundingBox";
+                                                newCC.color = color;
+                                                await context.sync();
+                                                
+                                                embedCount++;
+                                                console.log(`[AI Core] ✓ 已修正埋点`);
+                                            }
+                                        } catch (updateErr) {
+                                            console.warn(`[AI Core] 修正埋点失败: "${searchText}" - ${updateErr.message}`);
+                                        }
+                                    } else {
+                                        console.log(`[AI Core] 已验证正确，保留: "${searchText}"`);
+                                        embedCount++; // 计入成功数量
+                                    }
                                     continue;
                                 }
                                 
