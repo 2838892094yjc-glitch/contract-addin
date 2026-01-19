@@ -2977,37 +2977,98 @@ const AI_SECTION_CATEGORIES = [
 /**
  * 调用豆包 AI 分析文档
  * @param {string} documentText 文档文本内容
+ * @param {number} chunkIndex 当前分块索引（可选）
+ * @param {number} totalChunks 总分块数（可选）
  * @returns {Promise<Array>} 识别出的变量列表
  */
-async function callDoubaoAI(documentText) {
-    console.log("[AI] 开始调用豆包 AI...");
+async function callDoubaoAI(documentText, chunkIndex = 0, totalChunks = 1) {
+    console.log(`[AI] 开始调用豆包 AI... (分块 ${chunkIndex + 1}/${totalChunks})`);
     console.log(`[AI] 文档长度: ${documentText.length} 字符`);
     
-    const prompt = `你是合同分析专家。分析以下合同文本，识别出所有需要填写的变量/空白处。
+    const chunkInfo = totalChunks > 1 ? `\n\n注意：这是文档的第 ${chunkIndex + 1}/${totalChunks} 部分。` : '';
+    
+    const prompt = `你是一位资深合同起草专家，正在制作合同模版供实习生使用。
 
-可用分类（必须使用这些 sectionId）：
-${AI_SECTION_CATEGORIES.map(s => `- ${s.id}: ${s.name}（${s.examples}）`).join('\n')}
+【任务】
+识别合同中的变量，挖空它们，保留固定条款。${chunkInfo}
 
-返回 JSON 数组，每项包含：
-- text: 变量原文（精确匹配文档中的文字，用于搜索定位）
-- label: 中文名称描述（用于表单显示）
-- sectionId: 归属分类ID（必须是上面列出的 id 之一）
-- type: 字段类型 (text/date/number)
+【变量分类】
 
-识别规则：
-1. 识别需要填写的内容：公司名称、人名、日期、金额、地址、证件号等
-2. 跳过已有【】包围的文字（这些已经是占位符）
-3. text 必须与文档原文完全一致，以便精确搜索
-4. 合理判断分类，无法归类的放入 section_other
-5. 不要识别固定的条款文字，只识别需要根据实际情况填写的变量
+1. field（必填变量）
+   - 值会变化，但**必须存在**于每份合同
+   - 如：公司名称、签约日期、投资金额
+   - 序列中的**第一项**（如"股东1"、"投资人1"）
+
+2. paragraph（可选段落）
+   - 整个部分**可能不出现**在某些合同中
+   - 如：回购权条款、对赌条款、股东2/3/4...
+   - 通常包含"如有"、"若"、"可选"、"视情况"等词
+   - 或者是序列中的**非首项**
+
+【嵌套结构】
+- 大的 paragraph 内部可嵌套小的 field
+- 例如：回购权条款(paragraph) 包含 回购价格(field)、回购期限(field)
+- 用 parentTag 字段标记父级（填写父级的 label 拼音）
+
+【同一变量识别】
+- 识别同义词：公司名称/企业名称/公司名 → 同一变量
+- 为所有出现位置使用相同的 tag（基于第一次出现的 label）
+- 在返回结果中只出现一次（去重）
+- 用 alternativeTexts 记录其他表述形式
+
+【返回格式】
+JSON 数组，每项包含：
+- text: 变量原文（第一次出现的形式，精确匹配）
+- alternativeTexts: 其他同义表述数组（可选，如 ["企业名称", "公司名"]）
+- label: 中文名称（用于表单显示和生成 tag）
+- sectionId: 分类ID（见下方列表）
+- type: text/date/number
+- mode: "field" 或 "paragraph"
+- parentTag: 父级 paragraph 的 label 拼音（如有嵌套，可选）
+
+【分类ID】
+${AI_SECTION_CATEGORIES.map(s => `- ${s.id}: ${s.name}`).join('\n')}
+
+【识别规则】
+1. 跳过已有【】包围的文字（已是占位符）
+2. text 必须与文档原文完全一致
+3. 同义词合并（如"甲方"/"投资方"/"投资人"）
+4. 序列判断（第一项 field，后续 paragraph）
+5. 判断是否可整段删除（如"如有回购权..." → paragraph）
+
+【示例返回】
+[
+  {
+    "text": "甲方公司",
+    "alternativeTexts": ["甲方", "投资方"],
+    "label": "投资方名称",
+    "sectionId": "section_current_investors",
+    "type": "text",
+    "mode": "field"
+  },
+  {
+    "text": "如甲方要求回购",
+    "label": "回购权条款",
+    "sectionId": "section_redemption",
+    "type": "text",
+    "mode": "paragraph"
+  },
+  {
+    "text": "回购价格",
+    "label": "回购价格",
+    "sectionId": "section_redemption",
+    "type": "number",
+    "mode": "field",
+    "parentTag": "HuiGouQuanTiaoKuan"
+  }
+]
 
 合同文本：
 ---
-${documentText.substring(0, 12000)}
+${documentText}
 ---
 
-只返回 JSON 数组，不要其他任何内容。示例格式：
-[{"text":"甲方公司","label":"甲方名称","sectionId":"section_company_info","type":"text"}]`;
+只返回 JSON 数组，不要其他任何内容。`;
 
     try {
         const response = await fetch(DOUBAO_API.url, {
@@ -3069,6 +3130,14 @@ ${documentText.substring(0, 12000)}
             if (!validSectionIds.includes(v.sectionId)) {
                 v.sectionId = "section_other";
             }
+            // 确保 mode 有效
+            if (!v.mode || !['field', 'paragraph'].includes(v.mode)) {
+                v.mode = 'field'; // 默认必填
+            }
+            // 确保 alternativeTexts 是数组
+            if (v.alternativeTexts && !Array.isArray(v.alternativeTexts)) {
+                v.alternativeTexts = [];
+            }
             return true;
         });
         
@@ -3078,6 +3147,103 @@ ${documentText.substring(0, 12000)}
         console.error("[AI] 调用失败:", error);
         throw error;
     }
+}
+
+/**
+ * 分段上传全文进行 AI 分析
+ * @param {string} fullText 完整文档文本
+ * @returns {Promise<Array>} 识别出的变量列表（已去重）
+ */
+async function analyzeFullDocument(fullText) {
+    const CHUNK_SIZE = 10000; // 每段约 10000 字符
+    console.log(`[AI] 文档总长度: ${fullText.length} 字符`);
+    
+    if (fullText.length <= CHUNK_SIZE) {
+        // 文档够短，直接分析
+        return await callDoubaoAI(fullText, 0, 1);
+    }
+    
+    // 分段处理
+    const chunks = [];
+    for (let i = 0; i < fullText.length; i += CHUNK_SIZE) {
+        chunks.push(fullText.substring(i, i + CHUNK_SIZE));
+    }
+    
+    console.log(`[AI] 分为 ${chunks.length} 段进行分析`);
+    let allVariables = [];
+    
+    for (let i = 0; i < chunks.length; i++) {
+        showNotification(`AI 分析中... (${i + 1}/${chunks.length})`, "info", 3000);
+        try {
+            const result = await callDoubaoAI(chunks[i], i, chunks.length);
+            allVariables = allVariables.concat(result);
+            console.log(`[AI] 第 ${i + 1} 段识别出 ${result.length} 个变量`);
+        } catch (error) {
+            console.warn(`[AI] 第 ${i + 1} 段分析失败:`, error);
+            // 继续处理下一段
+        }
+    }
+    
+    // 去重：合并同一变量
+    const deduplicated = deduplicateVariables(allVariables);
+    console.log(`[AI] 去重后: ${deduplicated.length} 个变量`);
+    
+    return deduplicated;
+}
+
+/**
+ * 变量去重：合并同义词和重复变量
+ */
+function deduplicateVariables(variables) {
+    const uniqueMap = new Map(); // key: tag, value: variable
+    
+    for (const v of variables) {
+        const tag = generatePinyinTag(v.label);
+        
+        if (!uniqueMap.has(tag)) {
+            // 第一次出现，直接加入
+            uniqueMap.set(tag, v);
+        } else {
+            // 已存在，合并 alternativeTexts
+            const existing = uniqueMap.get(tag);
+            if (v.text !== existing.text) {
+                // 不同的表述形式，加入 alternativeTexts
+                if (!existing.alternativeTexts) {
+                    existing.alternativeTexts = [];
+                }
+                if (!existing.alternativeTexts.includes(v.text)) {
+                    existing.alternativeTexts.push(v.text);
+                }
+            }
+            // 合并 alternativeTexts
+            if (v.alternativeTexts && v.alternativeTexts.length > 0) {
+                if (!existing.alternativeTexts) {
+                    existing.alternativeTexts = [];
+                }
+                v.alternativeTexts.forEach(alt => {
+                    if (!existing.alternativeTexts.includes(alt) && alt !== existing.text) {
+                        existing.alternativeTexts.push(alt);
+                    }
+                });
+            }
+        }
+    }
+    
+    return Array.from(uniqueMap.values());
+}
+
+/**
+ * 生成拼音 tag（PascalCase）
+ */
+function generatePinyinTag(label) {
+    if (typeof pinyin === 'undefined') {
+        // 降级方案：直接使用 label
+        return label.replace(/\s+/g, '');
+    }
+    return pinyin(label, { toneType: 'none', pattern: 'first', v: true })
+        .split(' ')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join('');
 }
 
 /**
@@ -3129,12 +3295,27 @@ function renderAIFieldsInForm(aiFields) {
     
     // 清除之前的 AI 字段（如果有）
     document.querySelectorAll('.ai-field-wrapper').forEach(el => el.remove());
+    document.querySelectorAll('.ai-fields-section').forEach(el => el.remove());
     
     if (aiFields.length === 0) return;
     
+    // 去重：同一 tag 只保留第一个
+    const uniqueFields = [];
+    const seenTags = new Set();
+    
+    for (const field of aiFields) {
+        const tag = generatePinyinTag(field.label);
+        if (!seenTags.has(tag)) {
+            seenTags.add(tag);
+            uniqueFields.push(field);
+        }
+    }
+    
+    console.log(`[AI Form] 去重后: ${uniqueFields.length} 个字段`);
+    
     // 按 sectionId 分组
     const grouped = {};
-    aiFields.forEach(f => {
+    uniqueFields.forEach(f => {
         if (!grouped[f.sectionId]) grouped[f.sectionId] = [];
         grouped[f.sectionId].push(f);
     });
@@ -3176,8 +3357,34 @@ function renderAIFieldsInForm(aiFields) {
             </div>
         `;
         
-        fields.forEach(field => {
+        // 分离父级和子级字段
+        const parentFields = fields.filter(f => !f.parentTag);
+        const childFields = fields.filter(f => f.parentTag);
+        
+        // 先渲染父级字段
+        parentFields.forEach(field => {
             const wrapper = createAIFieldElement(field);
+            aiContainer.appendChild(wrapper);
+            
+            // 如果有子字段，渲染它们（缩进）
+            const childrenOfThis = childFields.filter(c => 
+                c.parentTag === generatePinyinTag(field.label)
+            );
+            childrenOfThis.forEach(child => {
+                const childWrapper = createAIFieldElement(child, true);
+                aiContainer.appendChild(childWrapper);
+            });
+        });
+        
+        // 渲染没有父级的子字段（可能 AI 识别有误）
+        const orphanChildren = childFields.filter(c => {
+            const hasParent = parentFields.some(p => 
+                generatePinyinTag(p.label) === c.parentTag
+            );
+            return !hasParent;
+        });
+        orphanChildren.forEach(child => {
+            const wrapper = createAIFieldElement(child);
             aiContainer.appendChild(wrapper);
         });
         
@@ -3189,42 +3396,51 @@ function renderAIFieldsInForm(aiFields) {
 
 /**
  * 创建单个 AI 字段的表单元素
+ * @param {Object} field 字段对象
+ * @param {boolean} isNested 是否为嵌套字段（子字段需要缩进）
  */
-function createAIFieldElement(field) {
+function createAIFieldElement(field, isNested = false) {
     // 生成 tag（拼音驼峰）
-    const pinyinTag = pinyin(field.label, { toneType: 'none' })
-        .split(' ')
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-        .join('');
+    const pinyinTag = generatePinyinTag(field.label);
+    const mode = field.mode || 'field';
+    
+    // 根据 mode 确定颜色
+    const bgColor = mode === 'paragraph' ? 'rgba(245, 158, 11, 0.05)' : 'rgba(59, 130, 246, 0.05)';
+    const borderColor = mode === 'paragraph' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(59, 130, 246, 0.3)';
+    const labelColor = mode === 'paragraph' ? '#f59e0b' : '#3b82f6';
+    const badgeColor = mode === 'paragraph' ? '#f59e0b' : '#6366f1';
+    const badgeText = mode === 'paragraph' ? '可选' : 'AI';
     
     const wrapper = document.createElement('div');
     wrapper.className = 'field-wrapper ai-field-wrapper';
     wrapper.dataset.aiField = 'true';
     wrapper.dataset.tag = pinyinTag;
+    wrapper.dataset.mode = mode;
     wrapper.style.cssText = `
         position: relative;
         padding: 8px 12px;
         margin: 6px 0;
-        background: rgba(99, 102, 241, 0.05);
-        border: 1px solid rgba(99, 102, 241, 0.3);
+        ${isNested ? 'margin-left: 24px;' : ''}
+        background: ${bgColor};
+        border: 1px solid ${borderColor};
         border-radius: 6px;
     `;
     
-    // AI 标签
-    const aiBadge = document.createElement('span');
-    aiBadge.className = 'ai-badge';
-    aiBadge.textContent = 'AI';
-    aiBadge.style.cssText = `
+    // 模式标签
+    const modeBadge = document.createElement('span');
+    modeBadge.className = 'ai-badge';
+    modeBadge.textContent = badgeText;
+    modeBadge.style.cssText = `
         position: absolute;
         top: -6px;
         right: 8px;
-        background: #6366f1;
+        background: ${badgeColor};
         color: white;
         font-size: 10px;
         padding: 1px 6px;
         border-radius: 3px;
     `;
-    wrapper.appendChild(aiBadge);
+    wrapper.appendChild(modeBadge);
     
     // 删除按钮
     const deleteBtn = document.createElement('button');
@@ -3256,46 +3472,120 @@ function createAIFieldElement(field) {
     label.style.cssText = `
         display: block;
         font-size: 12px;
-        color: #6366f1;
+        color: ${labelColor};
         margin-bottom: 4px;
         font-weight: 500;
     `;
     wrapper.appendChild(label);
     
-    // Input
-    let input;
-    if (field.type === 'date') {
-        input = document.createElement('input');
-        input.type = 'date';
-    } else if (field.type === 'number') {
-        input = document.createElement('input');
-        input.type = 'number';
+    if (mode === 'paragraph') {
+        // paragraph 模式：渲染开关按钮
+        const toggleContainer = document.createElement('div');
+        toggleContainer.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+        
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'toggle-paragraph-btn';
+        toggleBtn.dataset.tag = pinyinTag;
+        toggleBtn.textContent = '显示段落';
+        toggleBtn.style.cssText = `
+            padding: 6px 12px;
+            background: ${badgeColor};
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        `;
+        
+        toggleBtn.onclick = async () => {
+            // 调用现有的 toggle 机制
+            await toggleParagraph(pinyinTag, toggleBtn);
+        };
+        
+        toggleContainer.appendChild(toggleBtn);
+        wrapper.appendChild(toggleContainer);
+        
     } else {
-        input = document.createElement('input');
-        input.type = 'text';
+        // field 模式：渲染输入框
+        let input;
+        if (field.type === 'date') {
+            input = document.createElement('input');
+            input.type = 'date';
+        } else if (field.type === 'number') {
+            input = document.createElement('input');
+            input.type = 'number';
+        } else {
+            input = document.createElement('input');
+            input.type = 'text';
+        }
+        
+        input.id = `ai_${pinyinTag}`;
+        input.name = pinyinTag;
+        input.dataset.tag = pinyinTag;
+        input.placeholder = field.text || field.label;
+        input.style.cssText = `
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid ${borderColor};
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+        `;
+        
+        // 输入时同步到文档
+        input.addEventListener('input', debounce(async () => {
+            await applyAIFieldToDocument(pinyinTag, input.value || `[${field.label}]`);
+        }, 500));
+        
+        wrapper.appendChild(input);
     }
     
-    input.id = `ai_${pinyinTag}`;
-    input.name = pinyinTag;
-    input.dataset.tag = pinyinTag;
-    input.placeholder = field.text || field.label;
-    input.style.cssText = `
-        width: 100%;
-        padding: 6px 8px;
-        border: 1px solid rgba(99, 102, 241, 0.3);
-        border-radius: 4px;
-        font-size: 13px;
-        background: white;
-    `;
-    
-    // 输入时同步到文档
-    input.addEventListener('input', debounce(async () => {
-        await applyAIFieldToDocument(pinyinTag, input.value || `[${field.label}]`);
-    }, 500));
-    
-    wrapper.appendChild(input);
-    
     return wrapper;
+}
+
+/**
+ * 切换 paragraph 段落的显示/隐藏
+ */
+async function toggleParagraph(tag, button) {
+    try {
+        // 复用现有的 toggle 逻辑
+        // 这里简化实现，实际可以调用现有的 toggleRoundVisibility 等函数
+        const isHidden = button.textContent === '显示段落';
+        
+        await Word.run(async (context) => {
+            const contentControls = context.document.contentControls;
+            contentControls.load("items");
+            await context.sync();
+            
+            for (const cc of contentControls.items) {
+                cc.load("tag");
+            }
+            await context.sync();
+            
+            for (const cc of contentControls.items) {
+                if (cc.tag === tag) {
+                    if (isHidden) {
+                        // 显示：恢复内容
+                        cc.load("text");
+                        await context.sync();
+                        // 这里简化，实际可能需要从 Settings 恢复
+                    } else {
+                        // 隐藏：清空内容
+                        await insertTextPreserveFormat(cc, '', context);
+                    }
+                }
+            }
+            await context.sync();
+        });
+        
+        // 切换按钮状态
+        button.textContent = isHidden ? '隐藏段落' : '显示段落';
+        button.style.background = isHidden ? '#ef4444' : '#f59e0b';
+        
+    } catch (error) {
+        console.error('[Toggle] 切换失败:', error);
+        showNotification(`切换失败: ${error.message}`, 'error');
+    }
 }
 
 /**
@@ -3538,67 +3828,88 @@ async function aiRecognizeCore() {
         return { success: 0, skipped: 0 };
     }
     
-    // Step 2: 调用 AI 分析
-    const aiResult = await callDoubaoAI(docText);
+    // Step 2: 调用 AI 分析（支持全文分段）
+    const aiResult = await analyzeFullDocument(docText);
     
     if (aiResult.length === 0) {
         console.log("[AI Core] AI 未识别到变量");
         return { success: 0, skipped: 0 };
     }
     
-    // Step 3: 在文档中创建 Content Control
+    console.log(`[AI Core] AI 识别到 ${aiResult.length} 个变量（已去重）`);
+    
+    // Step 3: 为每个变量创建 Content Control（支持多处埋点）
     await Word.run(async (context) => {
         for (const variable of aiResult) {
             try {
-                // 搜索变量文本
-                const searchResults = context.document.body.search(variable.text, { 
-                    matchCase: false,
-                    matchWholeWord: false 
-                });
-                searchResults.load("items");
-                await context.sync();
+                // 生成统一的 tag
+                const pinyinTag = generatePinyinTag(variable.label);
                 
-                if (searchResults.items.length === 0) {
-                    console.log(`[AI Core] 未找到文本: "${variable.text}"`);
-                    skippedCount++;
-                    continue;
+                // 根据 mode 确定颜色
+                const color = variable.mode === 'paragraph' ? '#f59e0b' : '#3b82f6'; // 橙色/蓝色
+                const title = variable.mode === 'paragraph' ? `[可选] ${variable.label}` : variable.label;
+                
+                // 收集所有需要搜索的文本（原文 + 同义词）
+                const searchTexts = [variable.text];
+                if (variable.alternativeTexts && variable.alternativeTexts.length > 0) {
+                    searchTexts.push(...variable.alternativeTexts);
                 }
                 
-                // 处理第一个匹配项
-                const range = searchResults.items[0];
-                range.load("text, parentContentControlOrNullObject");
-                await context.sync();
+                console.log(`[AI Core] 处理变量: ${variable.label}, 搜索 ${searchTexts.length} 种表述`);
                 
-                // 检查是否已有埋点
-                const parentCC = range.parentContentControlOrNullObject;
-                parentCC.load("isNullObject, tag");
-                await context.sync();
-                
-                if (!parentCC.isNullObject) {
-                    console.log(`[AI Core] 跳过已埋点: "${variable.text}"`);
-                    skippedCount++;
-                    continue;
+                // 为每种表述搜索并创建埋点
+                let embedCount = 0;
+                for (const searchText of searchTexts) {
+                    const searchResults = context.document.body.search(searchText, { 
+                        matchCase: false,
+                        matchWholeWord: false 
+                    });
+                    searchResults.load("items");
+                    await context.sync();
+                    
+                    if (searchResults.items.length === 0) {
+                        console.log(`[AI Core] 未找到文本: "${searchText}"`);
+                        continue;
+                    }
+                    
+                    // 处理所有匹配项
+                    for (const range of searchResults.items) {
+                        range.load("text, parentContentControlOrNullObject");
+                        await context.sync();
+                        
+                        // 检查是否已有埋点
+                        const parentCC = range.parentContentControlOrNullObject;
+                        parentCC.load("isNullObject");
+                        await context.sync();
+                        
+                        if (!parentCC.isNullObject) {
+                            console.log(`[AI Core] 跳过已埋点: "${searchText}"`);
+                            continue;
+                        }
+                        
+                        // 创建 Content Control（所有同义词共享同一个 tag）
+                        const cc = range.insertContentControl("RichText");
+                        cc.tag = pinyinTag;
+                        cc.title = title;
+                        cc.appearance = "BoundingBox";
+                        cc.color = color;
+                        
+                        embedCount++;
+                    }
+                    
+                    await context.sync();
                 }
                 
-                // 生成拼音 tag
-                const pinyinTag = pinyin(variable.label, { toneType: 'none' })
-                    .split(' ')
-                    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-                    .join('');
-                
-                // 创建 Content Control
-                const cc = range.insertContentControl("RichText");
-                cc.tag = pinyinTag;
-                cc.title = variable.label;
-                cc.appearance = "BoundingBox";
-                cc.color = "#6366f1"; // 紫色，区分 AI 识别
-                
-                await context.sync();
-                successCount++;
-                console.log(`[AI Core] ✓ 埋点成功: ${variable.label} → ${pinyinTag}`);
+                if (embedCount > 0) {
+                    successCount++;
+                    console.log(`[AI Core] ✓ 埋点成功: ${variable.label} → ${pinyinTag} (${embedCount} 处)`);
+                } else {
+                    skippedCount++;
+                    console.log(`[AI Core] 跳过: ${variable.label} (未找到任何匹配)`);
+                }
                 
             } catch (err) {
-                console.warn(`[AI Core] 处理变量失败 (${variable.text}):`, err.message);
+                console.warn(`[AI Core] 处理变量失败 (${variable.label}):`, err.message);
                 skippedCount++;
             }
         }
