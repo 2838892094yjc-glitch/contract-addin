@@ -2992,6 +2992,15 @@ async function callDoubaoAI(documentText, chunkIndex = 0, totalChunks = 1) {
 【任务】
 识别合同中的变量，挖空它们，保留固定条款。${chunkInfo}
 
+【重要：占位符识别】
+⚠️ 文档中的【xxx】格式是**待填写的占位符**，必须特别处理：
+- 【公司名称】→ text 应为 "【公司名称】" 或只取里面的 "公司名称"
+- 【    】或【空白】→ 根据**上下文**判断是什么变量
+  - 例如 "地址：【    】" → 这是"地址"字段
+  - 例如 "联系人：【    】" → 这是"联系人"字段
+  - 例如 "甲方（委托方）：【    】" → 这是"甲方名称"字段
+- 请将这些占位符的 text 设为**包含上下文的完整匹配**，如 "地址：" 后面的空白
+
 【变量分类】
 
 1. field（必填变量）
@@ -3018,8 +3027,8 @@ async function callDoubaoAI(documentText, chunkIndex = 0, totalChunks = 1) {
 
 【返回格式】
 JSON 数组，每项包含：
-- text: 变量原文（第一次出现的形式，精确匹配）
-- alternativeTexts: 其他同义表述数组（可选，如 ["企业名称", "公司名"]）
+- text: 变量原文（精确匹配，用于在文档中搜索定位）
+- alternativeTexts: 其他同义表述数组（可选）
 - label: 中文名称（用于表单显示和生成 tag）
 - sectionId: 分类ID（见下方列表）
 - type: text/date/number
@@ -3030,8 +3039,8 @@ JSON 数组，每项包含：
 ${AI_SECTION_CATEGORIES.map(s => `- ${s.id}: ${s.name}`).join('\n')}
 
 【识别规则】
-1. 跳过已有【】包围的文字（已是占位符）
-2. text 必须与文档原文完全一致
+1. 【xxx】格式的占位符必须识别，包括空白的【    】
+2. text 必须能在文档中**精确匹配**到（避免过于通用的词如单独的"地址"）
 3. 同义词合并（如"甲方"/"投资方"/"投资人"）
 4. 序列判断（第一项 field，后续 paragraph）
 5. 判断是否可整段删除（如"如有回购权..." → paragraph）
@@ -3830,83 +3839,101 @@ async function aiRecognizeCore() {
     console.log(`[AI Core] AI 识别到 ${aiResult.length} 个变量（已去重）`);
     
     // Step 3: 为每个变量创建 Content Control（支持多处埋点）
-    await Word.run(async (context) => {
-        for (const variable of aiResult) {
-            try {
-                // 生成统一的 tag
-                const pinyinTag = generatePinyinTag(variable.label);
-                
-                // 根据 mode 确定颜色
-                const color = variable.mode === 'paragraph' ? '#f59e0b' : '#3b82f6'; // 橙色/蓝色
-                const title = variable.mode === 'paragraph' ? `[可选] ${variable.label}` : variable.label;
-                
-                // 收集所有需要搜索的文本（原文 + 同义词）
-                const searchTexts = [variable.text];
-                if (variable.alternativeTexts && variable.alternativeTexts.length > 0) {
-                    searchTexts.push(...variable.alternativeTexts);
+    // 使用单独的 Word.run 来隔离每个变量的处理，避免一个失败影响全部
+    for (const variable of aiResult) {
+        try {
+            // 生成统一的 tag
+            const pinyinTag = generatePinyinTag(variable.label);
+            
+            // 根据 mode 确定颜色
+            const color = variable.mode === 'paragraph' ? '#f59e0b' : '#3b82f6'; // 橙色/蓝色
+            const title = variable.mode === 'paragraph' ? `[可选] ${variable.label}` : variable.label;
+            
+            // 收集所有需要搜索的文本（原文 + 同义词）
+            const searchTexts = [variable.text];
+            if (variable.alternativeTexts && variable.alternativeTexts.length > 0) {
+                searchTexts.push(...variable.alternativeTexts);
+            }
+            
+            console.log(`[AI Core] 处理变量: ${variable.label}, 搜索 ${searchTexts.length} 种表述`);
+            
+            // 为每种表述搜索并创建埋点
+            let embedCount = 0;
+            
+            for (const searchText of searchTexts) {
+                // 跳过过于通用的搜索词（可能导致误匹配）
+                if (searchText.length < 2) {
+                    console.log(`[AI Core] 跳过过短文本: "${searchText}"`);
+                    continue;
                 }
                 
-                console.log(`[AI Core] 处理变量: ${variable.label}, 搜索 ${searchTexts.length} 种表述`);
-                
-                // 为每种表述搜索并创建埋点
-                let embedCount = 0;
-                for (const searchText of searchTexts) {
-                    const searchResults = context.document.body.search(searchText, { 
-                        matchCase: false,
-                        matchWholeWord: false 
-                    });
-                    searchResults.load("items");
-                    await context.sync();
-                    
-                    if (searchResults.items.length === 0) {
-                        console.log(`[AI Core] 未找到文本: "${searchText}"`);
-                        continue;
-                    }
-                    
-                    // 处理所有匹配项
-                    for (const range of searchResults.items) {
-                        range.load("text, parentContentControlOrNullObject");
+                try {
+                    await Word.run(async (context) => {
+                        const searchResults = context.document.body.search(searchText, { 
+                            matchCase: false,
+                            matchWholeWord: false 
+                        });
+                        searchResults.load("items");
                         await context.sync();
                         
-                        // 检查是否已有埋点
-                        const parentCC = range.parentContentControlOrNullObject;
-                        parentCC.load("isNullObject");
-                        await context.sync();
-                        
-                        if (!parentCC.isNullObject) {
-                            console.log(`[AI Core] 跳过已埋点: "${searchText}"`);
-                            continue;
+                        if (searchResults.items.length === 0) {
+                            console.log(`[AI Core] 未找到文本: "${searchText}"`);
+                            return;
                         }
                         
-                        // 创建 Content Control（所有同义词共享同一个 tag）
-                        const cc = range.insertContentControl("RichText");
-                        cc.tag = pinyinTag;
-                        cc.title = title;
-                        cc.appearance = "BoundingBox";
-                        cc.color = color;
+                        // 限制每种表述最多处理前5个匹配（避免过多重复）
+                        const maxMatches = Math.min(searchResults.items.length, 5);
                         
-                        embedCount++;
-                    }
-                    
-                    await context.sync();
+                        // 处理匹配项
+                        for (let i = 0; i < maxMatches; i++) {
+                            const range = searchResults.items[i];
+                            try {
+                                range.load("text, parentContentControlOrNullObject");
+                                await context.sync();
+                                
+                                // 检查是否已有埋点
+                                const parentCC = range.parentContentControlOrNullObject;
+                                parentCC.load("isNullObject");
+                                await context.sync();
+                                
+                                if (!parentCC.isNullObject) {
+                                    console.log(`[AI Core] 跳过已埋点: "${searchText}"`);
+                                    continue;
+                                }
+                                
+                                // 创建 Content Control（所有同义词共享同一个 tag）
+                                const cc = range.insertContentControl("RichText");
+                                cc.tag = pinyinTag;
+                                cc.title = title;
+                                cc.appearance = "BoundingBox";
+                                cc.color = color;
+                                
+                                await context.sync();
+                                embedCount++;
+                            } catch (rangeErr) {
+                                // 单个匹配项失败，继续处理下一个
+                                console.log(`[AI Core] 单个匹配处理失败: "${searchText}" - ${rangeErr.message}`);
+                            }
+                        }
+                    });
+                } catch (searchErr) {
+                    console.log(`[AI Core] 搜索失败: "${searchText}" - ${searchErr.message}`);
                 }
-                
-                if (embedCount > 0) {
-                    successCount++;
-                    console.log(`[AI Core] ✓ 埋点成功: ${variable.label} → ${pinyinTag} (${embedCount} 处)`);
-                } else {
-                    skippedCount++;
-                    console.log(`[AI Core] 跳过: ${variable.label} (未找到任何匹配)`);
-                }
-                
-            } catch (err) {
-                console.warn(`[AI Core] 处理变量失败 (${variable.label}):`, err.message);
-                skippedCount++;
             }
+            
+            if (embedCount > 0) {
+                successCount++;
+                console.log(`[AI Core] ✓ 埋点成功: ${variable.label} → ${pinyinTag} (${embedCount} 处)`);
+            } else {
+                skippedCount++;
+                console.log(`[AI Core] 跳过: ${variable.label} (未找到任何匹配或全部失败)`);
+            }
+            
+        } catch (err) {
+            console.warn(`[AI Core] 处理变量失败 (${variable.label}):`, err.message);
+            skippedCount++;
         }
-        
-        await context.sync();
-    });
+    }
     
     // Step 4: 存储字段配置到文档
     await saveAIFieldsToDocument(aiResult);
@@ -3970,32 +3997,25 @@ async function autoGenerateForm() {
         const beforeTags = await getAllContentControlTags();
         console.log(`[AutoGenerate] 现有埋点数量: ${beforeTags.length}`);
         
-        // Step 3: 执行【】埋点
-        btn.innerHTML = '<i class="ms-Icon ms-Icon--Sync"></i> 处理【占位符】...';
-        console.log("[AutoGenerate] Step 3: 执行【】埋点...");
-        const bracketResult = await autoCreateContentControls();
-        console.log(`[AutoGenerate] 【】埋点结果: 成功 ${bracketResult.success}, 跳过 ${bracketResult.skipped}`);
-        
-        // Step 4: 执行 AI 识别
+        // Step 3: 执行 AI 识别（AI 会同时处理【】占位符和其他变量）
         btn.innerHTML = '<i class="ms-Icon ms-Icon--Sync"></i> AI 分析中...';
-        console.log("[AutoGenerate] Step 4: 执行 AI 识别...");
+        console.log("[AutoGenerate] Step 3: 执行 AI 识别（包含【】占位符）...");
         const aiResult = await aiRecognizeCore();
         console.log(`[AutoGenerate] AI 识别结果: 成功 ${aiResult.success}, 跳过 ${aiResult.skipped}`);
         
-        // Step 5: 记录新增埋点
+        // Step 4: 记录新增埋点
         const afterTags = await getAllContentControlTags();
         autoGeneratedTags = afterTags.filter(t => !beforeTags.includes(t));
         console.log(`[AutoGenerate] 新增埋点: ${autoGeneratedTags.length} 个`);
         
-        // Step 6: 显示撤销按钮
+        // Step 5: 显示撤销按钮
         const undoBtn = document.getElementById('btn-undo-embed');
         if (undoBtn && autoGeneratedTags.length > 0) {
             undoBtn.style.display = 'block';
         }
         
         // 完成通知
-        const totalSuccess = (bracketResult.success || 0) + (aiResult.success || 0);
-        showNotification(`生成完成！新增 ${totalSuccess} 个埋点`, "success", 5000);
+        showNotification(`生成完成！新增 ${aiResult.success || 0} 个埋点`, "success", 5000);
         console.log("[AutoGenerate] ========== 完成 ==========");
         
     } catch (error) {
