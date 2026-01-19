@@ -3254,26 +3254,42 @@ function deduplicateVariables(variables) {
  * 生成拼音 tag（PascalCase）
  */
 function generatePinyinTag(label) {
+    // pinyin-pro 库的全局变量是 pinyinPro，而不是 pinyin
+    const pinyinLib = typeof pinyinPro !== 'undefined' ? pinyinPro : (typeof pinyin !== 'undefined' ? pinyin : null);
+    
     // #region agent log
-    console.log(`[DEBUG-H3] generatePinyinTag 输入: "${label}", pinyin库=${typeof pinyin !== 'undefined' ? '可用' : '不可用'}`);
+    console.log(`[DEBUG-H3] generatePinyinTag 输入: "${label}", pinyinPro=${typeof pinyinPro}, pinyin=${typeof pinyin}`);
     // #endregion
     
-    if (typeof pinyin === 'undefined') {
-        // 降级方案：直接使用 label
+    if (!pinyinLib) {
+        // 降级方案：直接使用 label（移除空格）
         const fallback = label.replace(/\s+/g, '');
         // #region agent log
         console.log(`[DEBUG-H3] 使用降级方案，返回: "${fallback}"`);
         // #endregion
         return fallback;
     }
-    const result = pinyin(label, { toneType: 'none', pattern: 'first', v: true })
-        .split(' ')
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-        .join('');
-    // #region agent log
-    console.log(`[DEBUG-H3] 拼音转换结果: "${result}"`);
-    // #endregion
-    return result;
+    
+    try {
+        // pinyin-pro 的 API: pinyinPro.pinyin(text, options)
+        const pinyinFunc = pinyinLib.pinyin || pinyinLib;
+        const pinyinResult = pinyinFunc(label, { toneType: 'none', type: 'array' });
+        
+        // 将每个字的拼音首字母大写并连接
+        const result = (Array.isArray(pinyinResult) ? pinyinResult : pinyinResult.split(' '))
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join('');
+        
+        // #region agent log
+        console.log(`[DEBUG-H3] 拼音转换结果: "${result}"`);
+        // #endregion
+        return result;
+    } catch (e) {
+        // #region agent log
+        console.error(`[DEBUG-H3] 拼音转换失败:`, e);
+        // #endregion
+        return label.replace(/\s+/g, '');
+    }
 }
 
 /**
@@ -7546,6 +7562,16 @@ function showAddFieldModal() {
  */
 function hideAddFieldModal() {
     const modal = document.getElementById("add-field-modal");
+    if (modal) {
+        modal.classList.remove("show");
+    }
+}
+
+/**
+ * 隐藏编辑字段弹窗
+ */
+function hideEditFieldModal() {
+    const modal = document.getElementById("edit-field-modal");
     if (modal) {
         modal.classList.remove("show");
     }
