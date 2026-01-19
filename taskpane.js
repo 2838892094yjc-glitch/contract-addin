@@ -2918,7 +2918,7 @@ async function autoCreateContentControls() {
                     const cc = range.insertContentControl("RichText");
                     cc.tag = pinyinTag;  // tag 使用驼峰拼音，如 "MuBiaoGongSiMingCheng"
                     cc.title = chineseName; // title 保持中文，如 "目标公司名称"
-                    cc.appearance = "BoundingBox";
+                    cc.appearance = "Tags"; // Tags 模式显示 title 标签
                     cc.color = "blue";
                     cc.cannotEdit = false;
                     cc.cannotDelete = false;
@@ -3464,7 +3464,7 @@ function createAIFieldElement(field, isNested = false) {
     deleteBtn.onclick = () => removeAIField(pinyinTag, wrapper);
     wrapper.appendChild(deleteBtn);
     
-    // Label
+    // Label（双击跳转到文档中的对应位置）
     const label = document.createElement('label');
     label.textContent = field.label;
     label.style.cssText = `
@@ -3473,7 +3473,10 @@ function createAIFieldElement(field, isNested = false) {
         color: ${labelColor};
         margin-bottom: 4px;
         font-weight: 500;
+        cursor: pointer;
     `;
+    label.title = '双击跳转到文档中的对应位置';
+    label.ondblclick = () => scrollToContentControl(pinyinTag);
     wrapper.appendChild(label);
     
     if (mode === 'paragraph') {
@@ -3539,6 +3542,143 @@ function createAIFieldElement(field, isNested = false) {
     }
     
     return wrapper;
+}
+
+/**
+ * 注册 Content Control 进入事件
+ * 当用户在文档中点击 Content Control 时，侧边栏滚动到对应的表单字段
+ */
+async function registerContentControlEvents() {
+    if (typeof Word === 'undefined') {
+        console.warn("[Events] Word API 不可用");
+        return;
+    }
+    
+    try {
+        await Word.run(async (context) => {
+            // 注册文档级别的 ContentControl 进入事件
+            context.document.onContentControlEntered.add(handleContentControlEntered);
+            await context.sync();
+            console.log("[Events] ✓ Content Control 进入事件已注册");
+        });
+    } catch (error) {
+        console.warn("[Events] 注册事件失败（可能不支持此 API）:", error.message);
+    }
+}
+
+/**
+ * Content Control 进入事件处理函数
+ * @param {Word.ContentControlEnteredEventArgs} event 事件参数
+ */
+async function handleContentControlEntered(event) {
+    console.log("[Events] Content Control 进入事件触发");
+    
+    try {
+        await Word.run(async (context) => {
+            // 获取被点击的 Content Control
+            const ccId = event.ids[0];
+            if (!ccId) return;
+            
+            const cc = context.document.contentControls.getById(ccId);
+            cc.load("tag, title");
+            await context.sync();
+            
+            const tag = cc.tag;
+            if (!tag) return;
+            
+            console.log(`[Events] 进入 Content Control: tag=${tag}, title=${cc.title}`);
+            
+            // 在侧边栏中找到对应的表单字段并滚动到它
+            scrollToFormField(tag);
+        });
+    } catch (error) {
+        console.warn("[Events] 处理进入事件失败:", error.message);
+    }
+}
+
+/**
+ * 滚动侧边栏到指定 tag 的表单字段
+ * @param {string} tag 字段的 tag
+ */
+function scrollToFormField(tag) {
+    // 尝试多种选择器找到对应的表单字段
+    const selectors = [
+        `input[data-tag="${tag}"]`,
+        `input[name="${tag}"]`,
+        `#ai_${tag}`,
+        `button[data-tag="${tag}"]`,
+        `.ai-field-wrapper[data-tag="${tag}"]`
+    ];
+    
+    let element = null;
+    for (const selector of selectors) {
+        element = document.querySelector(selector);
+        if (element) break;
+    }
+    
+    if (element) {
+        // 滚动到视图中并高亮
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // 添加临时高亮效果
+        const wrapper = element.closest('.ai-field-wrapper') || element.closest('.field-wrapper') || element.parentElement;
+        if (wrapper) {
+            wrapper.style.transition = 'background-color 0.3s';
+            wrapper.style.backgroundColor = '#fef3c7'; // 淡黄色高亮
+            setTimeout(() => {
+                wrapper.style.backgroundColor = '';
+            }, 2000);
+        }
+        
+        // 聚焦输入框
+        if (element.tagName === 'INPUT') {
+            element.focus();
+        }
+        
+        console.log(`[Events] ✓ 已滚动到表单字段: ${tag}`);
+    } else {
+        console.log(`[Events] 未找到表单字段: ${tag}`);
+    }
+}
+
+/**
+ * 滚动文档到指定 tag 的 Content Control 位置
+ * @param {string} tag Content Control 的 tag
+ */
+async function scrollToContentControl(tag) {
+    console.log(`[Scroll] 跳转到 Content Control: ${tag}`);
+    
+    if (typeof Word === 'undefined') {
+        console.warn("[Scroll] Word API 不可用");
+        return;
+    }
+    
+    try {
+        await Word.run(async (context) => {
+            const contentControls = context.document.contentControls;
+            contentControls.load("items");
+            await context.sync();
+            
+            // 找到匹配的 Content Control
+            for (const cc of contentControls.items) {
+                cc.load("tag");
+            }
+            await context.sync();
+            
+            const targetCC = contentControls.items.find(cc => cc.tag === tag);
+            if (targetCC) {
+                // 选中该 Content Control，Word 会自动滚动到可视区域
+                targetCC.select("Select");
+                await context.sync();
+                console.log(`[Scroll] ✓ 已跳转到: ${tag}`);
+            } else {
+                console.warn(`[Scroll] 未找到 Content Control: ${tag}`);
+                showNotification(`未找到对应的埋点: ${tag}`, "warning", 2000);
+            }
+        });
+    } catch (error) {
+        console.error("[Scroll] 跳转失败:", error);
+    }
 }
 
 /**
@@ -3725,7 +3865,7 @@ async function aiRecognizeAndEmbed() {
                     const cc = range.insertContentControl("RichText");
                     cc.tag = pinyinTag;
                     cc.title = variable.label;
-                    cc.appearance = "BoundingBox";
+                    cc.appearance = "Tags"; // Tags 模式显示 title 标签
                     cc.color = "#6366f1"; // 紫色，区分 AI 识别
                     
                     await context.sync();
@@ -3927,7 +4067,7 @@ async function aiRecognizeCore() {
                                                 const newCC = newRange.insertContentControl("RichText");
                                                 newCC.tag = pinyinTag;
                                                 newCC.title = title;
-                                                newCC.appearance = "BoundingBox";
+                                                newCC.appearance = "Tags"; // Tags 模式显示 title 标签
                                                 newCC.color = color;
                                                 await context.sync();
                                                 
@@ -3948,7 +4088,7 @@ async function aiRecognizeCore() {
                                 const cc = range.insertContentControl("RichText");
                                 cc.tag = pinyinTag;
                                 cc.title = title;
-                                cc.appearance = "BoundingBox";
+                                cc.appearance = "Tags"; // Tags 模式显示 title 标签
                                 cc.color = color;
                                 
                                 await context.sync();
@@ -4195,7 +4335,7 @@ async function insertControl(tag, title, isWrapper = false, specificRoundId = nu
             const contentControl = targetRange.insertContentControl("RichText");
             contentControl.tag = tag;
             contentControl.title = title;
-            contentControl.appearance = "BoundingBox";
+            contentControl.appearance = "Tags"; // Tags 模式显示 title 标签
             contentControl.color = "blue";
             contentControl.cannotEdit = false;  // 确保可编辑
             contentControl.cannotDelete = false; // 确保可删除
@@ -5599,7 +5739,7 @@ async function batchAlignRoundVisibility(targetEnabledRounds, targetEnabledInves
                         console.log(`[BatchAlign] No backup for ${op.tag}, skipping.`);
                     }
                     
-                    op.ctrl.appearance = "BoundingBox";
+                    op.ctrl.appearance = "Tags"; // Tags 模式显示 title 标签
                 }
 
                 // ========== 阶段 3：执行隐藏操作 (纯 OOXML，带大小拦截) ==========
@@ -5683,6 +5823,13 @@ if (typeof Office !== 'undefined') {
         
         // 5. 绑定紧急工具按钮
         bindEmergencyTools();
+        
+        // 6. 【新增】注册 Content Control 进入事件，实现双向跳转
+        try {
+            await registerContentControlEvents();
+        } catch (e) {
+            console.warn("[Init] Content Control 事件注册失败:", e);
+        }
     });
 } else {
     // 允许在浏览器预览模式下加载表单
