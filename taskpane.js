@@ -3254,19 +3254,34 @@ function deduplicateVariables(variables) {
  * 生成拼音 tag（PascalCase）
  */
 function generatePinyinTag(label) {
-    // pinyin-pro 库的全局变量是 pinyinPro，而不是 pinyin
-    const pinyinLib = typeof pinyinPro !== 'undefined' ? pinyinPro : (typeof pinyin !== 'undefined' ? pinyin : null);
-    
-    // #region agent log
-    console.log(`[DEBUG-H3] generatePinyinTag 输入: "${label}", pinyinPro=${typeof pinyinPro}, pinyin=${typeof pinyin}`);
+    // #region agent log - 假设 A: 检测所有可能的全局变量名
+    const globalVars = {
+        pinyinPro: typeof pinyinPro,
+        pinyin: typeof pinyin,
+        PinyinPro: typeof PinyinPro,
+        PINYIN_PRO: typeof PINYIN_PRO,
+        window_pinyinPro: typeof window !== 'undefined' ? typeof window.pinyinPro : 'no-window',
+        window_pinyin: typeof window !== 'undefined' ? typeof window.pinyin : 'no-window'
+    };
+    fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:generatePinyinTag',message:'检测全局变量',data:{label,globalVars},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     
+    // 尝试多种可能的全局变量名
+    let pinyinLib = null;
+    if (typeof pinyinPro !== 'undefined') pinyinLib = pinyinPro;
+    else if (typeof window !== 'undefined' && typeof window.pinyinPro !== 'undefined') pinyinLib = window.pinyinPro;
+    else if (typeof pinyin !== 'undefined') pinyinLib = pinyin;
+    else if (typeof window !== 'undefined' && typeof window.pinyin !== 'undefined') pinyinLib = window.pinyin;
+    
+    console.log(`[DEBUG-H3] generatePinyinTag 输入: "${label}", pinyinPro=${typeof pinyinPro}, pinyin=${typeof pinyin}`);
+    
     if (!pinyinLib) {
-        // 降级方案：直接使用 label（移除空格）
-        const fallback = label.replace(/\s+/g, '');
-        // #region agent log
-        console.log(`[DEBUG-H3] 使用降级方案，返回: "${fallback}"`);
+        // 降级方案：直接使用 label（移除空格和特殊字符）
+        // #region agent log - 假设 B: tag 包含特殊字符可能导致问题
+        const fallback = label.replace(/\s+/g, '').replace(/[（）()【】\[\]]/g, '_');
+        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:generatePinyinTag:fallback',message:'使用降级方案',data:{label,fallback,hasChinese:/[\u4e00-\u9fa5]/.test(fallback)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
         // #endregion
+        console.log(`[DEBUG-H3] 使用降级方案，返回: "${fallback}"`);
         return fallback;
     }
     
@@ -3280,15 +3295,17 @@ function generatePinyinTag(label) {
             .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
             .join('');
         
-        // #region agent log
         console.log(`[DEBUG-H3] 拼音转换结果: "${result}"`);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:generatePinyinTag:success',message:'拼音转换成功',data:{label,result},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
         // #endregion
         return result;
     } catch (e) {
-        // #region agent log
         console.error(`[DEBUG-H3] 拼音转换失败:`, e);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:generatePinyinTag:error',message:'拼音转换异常',data:{label,error:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
         // #endregion
-        return label.replace(/\s+/g, '');
+        return label.replace(/\s+/g, '').replace(/[（）()【】\[\]]/g, '_');
     }
 }
 
@@ -4208,29 +4225,51 @@ async function aiRecognizeCore() {
                                 }
                                 
                                 // 创建 Content Control（所有同义词共享同一个 tag）
-                                // #region agent log
-                                console.log(`[DEBUG-H6] 准备创建新 CC, tag=${pinyinTag}`);
+                                // #region agent log - 假设 B/C: 检查 tag 和 range 状态
+                                const tagInfo = {
+                                    pinyinTag,
+                                    hasChinese: /[\u4e00-\u9fa5]/.test(pinyinTag),
+                                    hasSpecialChars: /[（）()【】\[\]""]/.test(pinyinTag),
+                                    tagLength: pinyinTag.length,
+                                    rangeText: range.text?.substring(0, 50)
+                                };
+                                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:aiRecognizeCore:beforeInsertCC',message:'准备创建CC',data:tagInfo,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
                                 // #endregion
+                                console.log(`[DEBUG-H6] 准备创建新 CC, tag=${pinyinTag}`);
+                                
                                 const cc = range.insertContentControl("RichText");
                                 cc.tag = pinyinTag;
                                 cc.title = title;
                                 cc.appearance = "Tags"; // Tags 模式显示 title 标签
                                 cc.color = color;
                                 
-                                // #region agent log
                                 console.log(`[DEBUG-H6] CC 属性已设置, 准备 sync...`);
+                                // #region agent log - 假设 E: 检查 CC 对象状态
+                                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:aiRecognizeCore:beforeSync',message:'CC属性已设置准备sync',data:{tag:pinyinTag,title,color,ccExists:!!cc},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
                                 // #endregion
                                 await context.sync();
                                 // #region agent log
-                                console.log(`[DEBUG-H6] ✓ CC 创建成功`);
+                                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:aiRecognizeCore:afterSync',message:'CC创建成功',data:{tag:pinyinTag},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
                                 // #endregion
+                                console.log(`[DEBUG-H6] ✓ CC 创建成功`);
                                 embedCount++;
                             } catch (rangeErr) {
                                 // 单个匹配项失败，继续处理下一个
-                                // #region agent log
+                                // #region agent log - 假设 B/C/E: 详细错误信息
+                                const errorInfo = {
+                                    searchText: searchText?.substring(0, 50),
+                                    matchIndex: i,
+                                    pinyinTag,
+                                    errorMessage: rangeErr.message,
+                                    errorName: rangeErr.name,
+                                    debugInfo: rangeErr.debugInfo ? JSON.stringify(rangeErr.debugInfo) : null,
+                                    hasChinese: /[\u4e00-\u9fa5]/.test(pinyinTag),
+                                    hasSpecialChars: /[（）()【】\[\]""]/.test(pinyinTag)
+                                };
+                                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:aiRecognizeCore:rangeError',message:'CC创建失败',data:errorInfo,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'BCE'})}).catch(()=>{});
+                                // #endregion
                                 console.error(`[DEBUG-H5] 匹配项 ${i} 处理异常:`, rangeErr);
                                 console.log(`[DEBUG-H5] 错误栈: ${rangeErr.stack}`);
-                                // #endregion
                                 console.log(`[AI Core] 单个匹配处理失败: "${searchText}" - ${rangeErr.message}`);
                             }
                         }
@@ -5927,6 +5966,18 @@ if (typeof Office !== 'undefined') {
     Office.onReady(async (info) => {
         // 在 Word Online 环境下，即便 info.host 为空也尝试初始化表单
         console.log("Office.onReady triggered", info);
+        
+        // #region agent log - 假设 A: 检测 pinyin-pro 全局变量
+        const pinyinCheck = {
+            pinyinPro: typeof pinyinPro,
+            pinyin: typeof pinyin,
+            window_pinyinPro: typeof window?.pinyinPro,
+            window_pinyin: typeof window?.pinyin,
+            windowKeys: Object.keys(window).filter(k => k.toLowerCase().includes('pinyin'))
+        };
+        console.log('[DEBUG-A] pinyin-pro 全局变量检测:', pinyinCheck);
+        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:Office.onReady',message:'pinyin-pro全局变量检测',data:pinyinCheck,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         
         // 0. 【新增】先加载表单配置
         await loadFormConfig();
