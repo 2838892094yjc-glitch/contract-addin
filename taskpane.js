@@ -3251,21 +3251,25 @@ function deduplicateVariables(variables) {
 }
 
 /**
+ * 简单哈希函数：将字符串转换为唯一的 ASCII 标识符
+ * 使用 djb2 算法变体，生成可读的字母数字组合
+ */
+function simpleHash(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) + hash) + str.charCodeAt(i);
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    // 转换为正数并使用 base36（0-9a-z）
+    const positiveHash = Math.abs(hash);
+    return positiveHash.toString(36);
+}
+
+/**
  * 生成拼音 tag（PascalCase）
+ * 当 pinyin-pro 不可用时，使用 ASCII-only 哈希作为降级方案
  */
 function generatePinyinTag(label) {
-    // #region agent log - 假设 A: 检测所有可能的全局变量名
-    const globalVars = {
-        pinyinPro: typeof pinyinPro,
-        pinyin: typeof pinyin,
-        PinyinPro: typeof PinyinPro,
-        PINYIN_PRO: typeof PINYIN_PRO,
-        window_pinyinPro: typeof window !== 'undefined' ? typeof window.pinyinPro : 'no-window',
-        window_pinyin: typeof window !== 'undefined' ? typeof window.pinyin : 'no-window'
-    };
-    fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:generatePinyinTag',message:'检测全局变量',data:{label,globalVars},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    
     // 尝试多种可能的全局变量名
     let pinyinLib = null;
     if (typeof pinyinPro !== 'undefined') pinyinLib = pinyinPro;
@@ -3273,15 +3277,14 @@ function generatePinyinTag(label) {
     else if (typeof pinyin !== 'undefined') pinyinLib = pinyin;
     else if (typeof window !== 'undefined' && typeof window.pinyin !== 'undefined') pinyinLib = window.pinyin;
     
-    console.log(`[DEBUG-H3] generatePinyinTag 输入: "${label}", pinyinPro=${typeof pinyinPro}, pinyin=${typeof pinyin}`);
+    console.log(`[PinyinTag] 输入: "${label}", pinyinLib可用: ${!!pinyinLib}`);
     
     if (!pinyinLib) {
-        // 降级方案：直接使用 label（移除空格和特殊字符）
-        // #region agent log - 假设 B: tag 包含特殊字符可能导致问题
-        const fallback = label.replace(/\s+/g, '').replace(/[（）()【】\[\]]/g, '_');
-        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:generatePinyinTag:fallback',message:'使用降级方案',data:{label,fallback,hasChinese:/[\u4e00-\u9fa5]/.test(fallback)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
-        console.log(`[DEBUG-H3] 使用降级方案，返回: "${fallback}"`);
+        // 降级方案：使用 ASCII-only 哈希
+        // 生成格式: field_<hash> 确保完全 ASCII 兼容
+        const hash = simpleHash(label);
+        const fallback = `field_${hash}`;
+        console.log(`[PinyinTag] 使用 ASCII 哈希降级: "${label}" -> "${fallback}"`);
         return fallback;
     }
     
@@ -3295,17 +3298,15 @@ function generatePinyinTag(label) {
             .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
             .join('');
         
-        console.log(`[DEBUG-H3] 拼音转换结果: "${result}"`);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:generatePinyinTag:success',message:'拼音转换成功',data:{label,result},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
+        console.log(`[PinyinTag] 拼音转换: "${label}" -> "${result}"`);
         return result;
     } catch (e) {
-        console.error(`[DEBUG-H3] 拼音转换失败:`, e);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:generatePinyinTag:error',message:'拼音转换异常',data:{label,error:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        return label.replace(/\s+/g, '').replace(/[（）()【】\[\]]/g, '_');
+        console.error(`[PinyinTag] 拼音转换失败:`, e);
+        // 异常时也使用 ASCII-only 哈希
+        const hash = simpleHash(label);
+        const fallback = `field_${hash}`;
+        console.log(`[PinyinTag] 异常降级: "${label}" -> "${fallback}"`);
+        return fallback;
     }
 }
 
