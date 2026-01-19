@@ -3356,11 +3356,21 @@ function renderAIFieldsInForm(aiFields) {
         grouped[f.sectionId].push(f);
     });
     
+    // #region agent log H1-H3: 表单容器调试
+    const allSectionIds = Array.from(document.querySelectorAll('[data-section-id]')).map(el => el.getAttribute('data-section-id'));
+    const dynContainer = document.getElementById('dynamic-form-container');
+    fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3360',message:'form containers check',data:{allSectionIdsInDOM:allSectionIds,dynamicContainerExists:!!dynContainer,groupedSectionIds:Object.keys(grouped)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    
     // 为每个 section 添加 AI 字段
     for (const [sectionId, fields] of Object.entries(grouped)) {
         // 查找对应的 section 容器
         const sectionHeader = document.querySelector(`[data-section-id="${sectionId}"]`);
         let targetContainer = null;
+        
+        // #region agent log H2: section 查找
+        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3374',message:'section lookup',data:{sectionId,headerFound:!!sectionHeader,fieldsCount:fields.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
+        // #endregion
         
         if (sectionHeader) {
             // 找到 section 的字段容器
@@ -3371,6 +3381,10 @@ function renderAIFieldsInForm(aiFields) {
         if (!targetContainer) {
             targetContainer = document.getElementById('dynamic-form-container');
         }
+        
+        // #region agent log H3: 容器选择结果
+        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:3388',message:'container result',data:{sectionId,targetContainerFound:!!targetContainer,targetContainerId:targetContainer?.id,targetContainerClass:targetContainer?.className},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
         
         if (!targetContainer) continue;
         
