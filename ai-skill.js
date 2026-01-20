@@ -8,12 +8,8 @@
 // Skill.md 文件路径
 const SKILL_MD_PATH = './contract-variable-skill/Skill.md';
 
-// AI API 配置
-const DOUBAO_API = {
-    url: "https://ark.cn-beijing.volces.com/api/v3/bots/chat/completions",
-    token: "25f59ab0-c652-4e2f-8b3f-f3fba0f2ee18",  // 请替换为你的 token
-    model: "bot-20241216150614-gdg8f"
-};
+// AI API 配置：使用 taskpane.js 中已定义的 DOUBAO_API 全局变量
+// （不要重复声明，否则会导致 "Identifier already declared" 错误）
 
 // 文档切片大小
 const CHUNK_SIZE = 10000;  // 字符
