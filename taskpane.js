@@ -4671,39 +4671,56 @@ async function undoAutoEmbed() {
                 return;
             }
             
-            // 逐个删除 CC - 反向遍历避免索引变化问题
+            // V7: 使用 insertText 替换 CC 来移除框架
             const totalCount = ccs.items.length;
-            console.log(`[Undo-V6] 准备反向遍历删除 ${totalCount} 个 CC`);
+            console.log(`[Undo-V7] 准备处理 ${totalCount} 个 CC`);
             
-            // 反向遍历删除（从最后一个开始）
-            for (let i = totalCount - 1; i >= 0; i--) {
-                const cc = ccs.items[i];
+            // 先收集所有 CC 的信息（避免遍历时集合变化）
+            const ccInfos = [];
+            for (const cc of ccs.items) {
+                cc.load("tag, text, cannotDelete, cannotEdit");
+            }
+            await context.sync();
+            
+            for (const cc of ccs.items) {
+                ccInfos.push({
+                    cc: cc,
+                    tag: cc.tag,
+                    text: cc.text,
+                    cannotDelete: cc.cannotDelete
+                });
+            }
+            
+            console.log(`[Undo-V7] 已收集 ${ccInfos.length} 个 CC 信息`);
+            
+            // 反向处理
+            for (let i = ccInfos.length - 1; i >= 0; i--) {
+                const info = ccInfos[i];
+                const cc = info.cc;
                 
                 try {
-                    cc.load("tag, text, cannotDelete");
-                    await context.sync();
-                    
-                    // 先解锁
-                    if (cc.cannotDelete) {
+                    // 解锁
+                    if (info.cannotDelete || info.cannotEdit) {
                         cc.cannotDelete = false;
                         cc.cannotEdit = false;
                         await context.sync();
                     }
                     
-                    const textPreview = cc.text ? cc.text.substring(0, 20) : "(empty)";
-                    console.log(`[Undo-V6] 删除 CC[${i}] tag="${cc.tag}", text="${textPreview}..."`);
+                    // 方法：获取 CC 的 Range，用纯文本替换整个范围
+                    const text = info.text || "";
+                    const range = cc.getRange();
                     
-                    // delete(true) = keepContent = 保留内容，只删除框架
-                    cc.delete(true);
+                    // 用纯文本替换 CC 范围（会移除 CC 框架）
+                    range.insertText(text, "Replace");
                     await context.sync();
                     
                     deletedCount++;
                     
-                    if (deletedCount % 5 === 0 || deletedCount === 1) {
-                        console.log(`[Undo-V6] 进度: ${deletedCount}/${totalCount}`);
+                    if (deletedCount % 10 === 0 || deletedCount === 1) {
+                        console.log(`[Undo-V7] 进度: ${deletedCount}/${totalCount}, tag="${info.tag}"`);
                     }
-                } catch (delErr) {
-                    console.warn(`[Undo-V6] 删除 CC[${i}] 失败: ${delErr.message}`);
+                } catch (err) {
+                    console.warn(`[Undo-V7] 处理 CC[${i}] 失败: ${err.message}`);
                 }
             }
             
