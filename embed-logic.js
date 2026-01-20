@@ -38,11 +38,19 @@ async function searchInDocument(doc, searchText, context = null) {
 async function embedVariable(doc, variable) {
     const { context, prefix, placeholder, suffix, label, tag, mode } = variable;
     
+    // 【调试】输出变量的详细信息
+    console.log(`[Embed Debug] 开始埋点: ${label}`);
+    console.log(`  context: "${context?.substring(0, 100) || 'undefined'}..."`);
+    console.log(`  prefix: "${prefix || 'undefined'}"`);
+    console.log(`  placeholder: "${placeholder || 'undefined'}"`);
+    console.log(`  suffix: "${suffix || 'undefined'}"`);
+    
     try {
         return await Word.run(async (wordContext) => {
             // ==================== 阶段 1: 搜索定位 ====================
             
             // 策略 1: 搜索完整 context
+            console.log(`[Embed] 策略1: 搜索 context...`);
             let searchResults = doc.body.search(context, {
                 matchCase: false,
                 matchWholeWord: false
@@ -54,7 +62,7 @@ async function embedVariable(doc, variable) {
             let targetRange = null;
             
             if (searchResults.items.length === 0) {
-                console.warn(`[Embed] 未找到 context: ${context.substring(0, 100)}`);
+                console.warn(`[Embed] 策略1失败: 未找到 context`);
                 
                 // 策略 2: 尝试搜索 prefix + placeholder + suffix
                 const fullText = prefix + placeholder + suffix;
