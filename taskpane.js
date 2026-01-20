@@ -4783,49 +4783,70 @@ async function undoAutoEmbed() {
                 return;
             }
             
-            // V10: 简单方法 - 用纯文本替换（OOXML方法在Word Online不工作）
+            // V11: 操作整个文档的 OOXML 来移除 CC
             const totalCount = ccs.items.length;
-            console.log(`[Undo-V10] ========== 开始处理 ${totalCount} 个 CC ==========`);
-            console.log(`[Undo-V10] 注意：此方法会将CC替换为纯文本，可能丢失格式`);
+            console.log(`[Undo-V11] ========== 开始处理 ${totalCount} 个 CC ==========`);
+            console.log(`[Undo-V11] 方法：获取整个文档OOXML，移除CC标签，替换回去`);
             
-            let successCount = 0;
-            let errorCount = 0;
-            
-            // 反向处理每个 CC
-            for (let i = totalCount - 1; i >= 0; i--) {
-                const cc = ccs.items[i];
-                const ccIndex = totalCount - i;
+            try {
+                // Step 1: 获取整个文档的 OOXML
+                console.log(`[Undo-V11] Step1: 获取文档 OOXML...`);
+                const body = context.document.body;
+                const ooxmlResult = body.getOoxml();
+                await context.sync();
                 
-                try {
-                    // 加载 CC 文本
-                    cc.load("tag, text");
-                    await context.sync();
-                    
-                    const text = cc.text || "";
-                    console.log(`[Undo-V10] [${ccIndex}/${totalCount}] tag="${cc.tag}", text="${text.substring(0, 20)}..."`);
-                    
-                    // 获取 CC 的范围
-                    const range = cc.getRange();
-                    
-                    // 用纯文本替换整个 CC
-                    range.insertText(text, "Replace");
-                    await context.sync();
-                    
-                    successCount++;
-                    
-                    if (successCount % 5 === 0 || successCount === 1) {
-                        console.log(`[Undo-V10] ✅ 进度: ${successCount}/${totalCount}`);
-                    }
-                } catch (err) {
-                    errorCount++;
-                    console.error(`[Undo-V10] [${ccIndex}/${totalCount}] ❌ 失败: ${err.message}`);
+                let ooxml = ooxmlResult.value || "";
+                const originalLength = ooxml.length;
+                console.log(`[Undo-V11] 原始 OOXML 长度: ${originalLength}`);
+                
+                if (!ooxml || ooxml.length < 100) {
+                    console.error(`[Undo-V11] OOXML 获取失败或太短`);
+                    return;
+                }
+                
+                // Step 2: 统计 CC 标签数量
+                const sdtCount = (ooxml.match(/<w:sdt[ >]/g) || []).length;
+                console.log(`[Undo-V11] Step2: 发现 ${sdtCount} 个 <w:sdt> 标签`);
+                
+                // Step 3: 移除 CC 标签（保留内部内容）
+                console.log(`[Undo-V11] Step3: 移除 CC 标签...`);
+                
+                // 移除 CC 相关标签
+                ooxml = ooxml.replace(/<w:sdt[^>]*>/g, '');
+                ooxml = ooxml.replace(/<\/w:sdt>/g, '');
+                ooxml = ooxml.replace(/<w:sdtPr>[\s\S]*?<\/w:sdtPr>/g, '');
+                ooxml = ooxml.replace(/<w:sdtEndPr[^>]*\/>/g, '');
+                ooxml = ooxml.replace(/<w:sdtEndPr>[\s\S]*?<\/w:sdtEndPr>/g, '');
+                ooxml = ooxml.replace(/<w:sdtContent>/g, '');
+                ooxml = ooxml.replace(/<\/w:sdtContent>/g, '');
+                
+                const newLength = ooxml.length;
+                console.log(`[Undo-V11] 处理后 OOXML 长度: ${originalLength} -> ${newLength} (减少 ${originalLength - newLength})`);
+                
+                // Step 4: 验证处理后的 OOXML
+                const newSdtCount = (ooxml.match(/<w:sdt[ >]/g) || []).length;
+                console.log(`[Undo-V11] Step4: 处理后 <w:sdt> 数量: ${newSdtCount}`);
+                
+                if (newSdtCount > 0) {
+                    console.warn(`[Undo-V11] 警告：仍有 ${newSdtCount} 个未移除的 CC 标签`);
+                }
+                
+                // Step 5: 替换整个文档
+                console.log(`[Undo-V11] Step5: 替换文档内容...`);
+                body.insertOoxml(ooxml, "Replace");
+                await context.sync();
+                
+                console.log(`[Undo-V11] ✅ 文档替换完成`);
+                deletedCount = sdtCount;
+                
+            } catch (err) {
+                console.error(`[Undo-V11] ❌ 失败: ${err.message}`);
+                if (err.debugInfo) {
+                    console.error(`[Undo-V11] debugInfo:`, err.debugInfo);
                 }
             }
             
-            console.log(`[Undo-V10] ========== 处理完成 ==========`);
-            console.log(`[Undo-V10] 成功: ${successCount}, 失败: ${errorCount}, 总计: ${totalCount}`);
-            
-            deletedCount = successCount;
+            console.log(`[Undo-V11] ========== 处理完成 ==========`);
             
             // 验证：重新加载检查是否真的删除了
             const verifyControls = context.document.contentControls;
