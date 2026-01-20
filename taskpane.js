@@ -4642,19 +4642,22 @@ async function undoAutoEmbed() {
             // #endregion
             
             // 删除指定的 Content Control
+            const toDelete = [];
             for (const cc of ccs.items) {
                 if (tagsToDelete.includes(cc.tag)) {
-                    // #region agent log - 假设 A/B/D: 记录每个删除操作
-                    fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:beforeDeleteCC',message:'即将删除CC',data:{tag:cc.tag,deleteParam:false,deletedCountSoFar:deletedCount},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'ABD'})}).catch(()=>{});
-                    // #endregion
-                    
-                    cc.delete(true); // true = 保留内容，只删除控件
-                    deletedCount++;
-                    
-                    // #region agent log - 假设 A/B: 记录删除后
-                    fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:afterDeleteCC',message:'CC已删除',data:{tag:cc.tag,deletedCount},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'AB'})}).catch(()=>{});
-                    // #endregion
+                    toDelete.push(cc);
                 }
+            }
+            
+            // #region agent log - 假设 I: 批量删除前记录
+            fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:batchDelete',message:'批量删除',data:{totalToDelete:toDelete.length,tags:toDelete.map(cc=>cc.tag)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'I'})}).catch(()=>{});
+            console.log(`[Undo] 准备删除 ${toDelete.length} 个 Content Control`);
+            // #endregion
+            
+            // 批量删除（不在循环中 sync）
+            for (const cc of toDelete) {
+                cc.delete(false); // 根据代码库其他地方的注释，false = 保留内容
+                deletedCount++;
             }
             
             // #region agent log - 假设 E: 记录 sync 前状态
