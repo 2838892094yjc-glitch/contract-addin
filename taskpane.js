@@ -4276,6 +4276,22 @@ async function aiRecognizeCoreWithSkill() {
         console.log("[AI Skill Core] 调用 AI Skill...");
         const aiOutput = await window.AISkill.analyzeDocument(docText);
         
+        // 【调试】保存 AI 输出供检查
+        window.debugLastAIOutput = aiOutput;
+        console.log("[AI Skill Core] AI 原始输出已保存到 window.debugLastAIOutput");
+        console.log("[AI Skill Core] 示例变量（前3个）:");
+        if (aiOutput.variables && aiOutput.variables.length > 0) {
+            console.table(aiOutput.variables.slice(0, 3).map(v => ({
+                label: v.label,
+                context: v.context?.substring(0, 50) + '...',
+                prefix: v.prefix,
+                placeholder: v.placeholder,
+                suffix: v.suffix,
+                formatFn: v.formatFn,
+                mode: v.mode
+            })));
+        }
+        
         // Step 3: 验证 AI 输出
         const validation = window.AIParser.validateAIOutput(aiOutput);
         if (!validation.valid) {
