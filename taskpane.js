@@ -4594,23 +4594,28 @@ async function undoAutoEmbed() {
                 return;
             }
             
-            // 简单删除所有 CC（后续可以加用户选择）
-            console.log(`[Undo-V3-Step] 4. 准备删除所有 ${ccs.items.length} 个 CC`);
+            // 逐个删除 CC（每删除一个就 sync 一次，避免引用失效）
+            console.log(`[Undo-V3-Step] 4. 准备逐个删除 ${ccs.items.length} 个 CC`);
             
-            // 批量删除（不在循环中 sync）
+            // 逐个删除（每次都 sync）
             for (let i = 0; i < ccs.items.length; i++) {
                 const cc = ccs.items[i];
-                cc.delete(false); // false = 保留内容
-                deletedCount++;
                 
-                if (i === 0 || i === ccs.items.length - 1 || i % 10 === 0) {
-                    console.log(`[Undo-V3-Step] 已标记删除 ${i + 1}/${ccs.items.length}`);
+                try {
+                    cc.delete(false); // false = 保留内容
+                    await context.sync();
+                    deletedCount++;
+                    
+                    if (i === 0 || i === ccs.items.length - 1 || i % 5 === 0) {
+                        console.log(`[Undo-V3-Step] 已删除 ${i + 1}/${ccs.items.length}`);
+                    }
+                } catch (delErr) {
+                    console.warn(`[Undo-V3-Step] 删除第 ${i + 1} 个 CC 失败:`, delErr.message);
+                    // 继续删除下一个
                 }
             }
             
-            console.log(`[Undo-V3-Step] 5. 准备 sync (已标记删除 ${deletedCount} 个)`);
-            await context.sync();
-            console.log('[Undo-V3-Step] 6. sync 完成！');
+            console.log(`[Undo-V3-Step] 5. 完成！成功删除 ${deletedCount}/${ccs.items.length} 个 CC`);
         });
         
         // 清除 AI 表单项（如果撤销所有）
