@@ -4621,54 +4621,92 @@ async function undoAutoEmbed() {
         // #endregion
         
         await Word.run(async (context) => {
-            const ccs = context.document.contentControls;
-            ccs.load("items");
-            await context.sync();
-            
-            // #region agent log - 假设 C: 记录文档中所有 CC
-            const totalCCCount = ccs.items.length;
-            fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:afterLoadCC',message:'已加载所有CC',data:{totalCCCount},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
-            
-            // 加载所有 tag
-            for (const cc of ccs.items) {
-                cc.load("tag");
-            }
-            await context.sync();
-            
-            // #region agent log - 假设 C: 记录所有 CC 的 tags
-            const allCCTags = ccs.items.map(cc => cc.tag);
-            fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:allTags',message:'所有CC的tags',data:{allCCTags,matchCount:allCCTags.filter(t => tagsToDelete.includes(t)).length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
-            
-            // 删除指定的 Content Control
-            const toDelete = [];
-            for (const cc of ccs.items) {
-                if (tagsToDelete.includes(cc.tag)) {
-                    toDelete.push(cc);
+            try {
+                // #region agent log - 步骤1: 开始加载
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:step1',message:'开始Word.run',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'STEP'})}).catch(()=>{});
+                console.log('[Undo-Step] 1. 开始 Word.run');
+                // #endregion
+                
+                const ccs = context.document.contentControls;
+                ccs.load("items");
+                await context.sync();
+                
+                // #region agent log - 步骤2: CC加载完成
+                const totalCCCount = ccs.items.length;
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:step2',message:'CC加载完成',data:{totalCCCount},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'STEP'})}).catch(()=>{});
+                console.log(`[Undo-Step] 2. 加载了 ${totalCCCount} 个 CC`);
+                // #endregion
+                
+                // 加载所有 tag
+                for (const cc of ccs.items) {
+                    cc.load("tag");
                 }
+                await context.sync();
+                
+                // #region agent log - 步骤3: tags加载完成
+                const allCCTags = ccs.items.map(cc => cc.tag);
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:step3',message:'tags加载完成',data:{allCCTags:allCCTags.slice(0,10),totalTags:allCCTags.length,matchCount:allCCTags.filter(t => tagsToDelete.includes(t)).length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'STEP'})}).catch(()=>{});
+                console.log(`[Undo-Step] 3. 找到 ${allCCTags.filter(t => tagsToDelete.includes(t)).length} 个匹配的 tag`);
+                // #endregion
+                
+                // 删除指定的 Content Control
+                const toDelete = [];
+                for (const cc of ccs.items) {
+                    if (tagsToDelete.includes(cc.tag)) {
+                        toDelete.push(cc);
+                    }
+                }
+                
+                // #region agent log - 步骤4: 准备删除
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:step4',message:'准备删除',data:{totalToDelete:toDelete.length,deleteMethod:'batch',deleteParam:false},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'STEP'})}).catch(()=>{});
+                console.log(`[Undo-Step] 4. 准备删除 ${toDelete.length} 个 CC (使用 delete(false))`);
+                // #endregion
+                
+                // 批量删除（不在循环中 sync）
+                for (let i = 0; i < toDelete.length; i++) {
+                    const cc = toDelete[i];
+                    try {
+                        cc.delete(false); // 根据代码库其他地方的注释，false = 保留内容
+                        deletedCount++;
+                        // #region agent log - 每个删除操作
+                        if (i === 0 || i === toDelete.length - 1) {
+                            fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:deleteOne',message:'删除单个CC',data:{index:i,tag:cc.tag,total:toDelete.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'STEP'})}).catch(()=>{});
+                        }
+                        // #endregion
+                    } catch (delErr) {
+                        // #region agent log - 删除失败
+                        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:deleteError',message:'删除单个CC失败',data:{index:i,tag:cc.tag,error:delErr.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'STEP'})}).catch(()=>{});
+                        console.error(`[Undo-Step] 删除失败 [${i}]: ${cc.tag}`, delErr);
+                        // #endregion
+                    }
+                }
+                
+                // #region agent log - 步骤5: 准备sync
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:step5',message:'准备sync',data:{deletedCount,totalCCCount},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'STEP'})}).catch(()=>{});
+                console.log(`[Undo-Step] 5. 准备 sync (已标记删除 ${deletedCount} 个)`);
+                // #endregion
+                
+                await context.sync();
+                
+                // #region agent log - 步骤6: sync完成
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:step6',message:'sync完成',data:{deletedCount},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'STEP'})}).catch(()=>{});
+                console.log('[Undo-Step] 6. sync 完成');
+                // #endregion
+            } catch (innerError) {
+                // #region agent log - Word.run内部错误
+                const innerErrorDetail = {
+                    message: innerError.message,
+                    name: innerError.name,
+                    debugInfo: innerError.debugInfo ? JSON.stringify(innerError.debugInfo) : null
+                };
+                fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:innerError',message:'Word.run内部错误',data:innerErrorDetail,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'ERROR'})}).catch(()=>{});
+                console.error('[Undo-Step] Word.run 内部错误:', innerError);
+                if (innerError.debugInfo) {
+                    console.error('[Undo-Step] debugInfo:', innerError.debugInfo);
+                }
+                // #endregion
+                throw innerError;
             }
-            
-            // #region agent log - 假设 I: 批量删除前记录
-            fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:batchDelete',message:'批量删除',data:{totalToDelete:toDelete.length,tags:toDelete.map(cc=>cc.tag)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'I'})}).catch(()=>{});
-            console.log(`[Undo] 准备删除 ${toDelete.length} 个 Content Control`);
-            // #endregion
-            
-            // 批量删除（不在循环中 sync）
-            for (const cc of toDelete) {
-                cc.delete(false); // 根据代码库其他地方的注释，false = 保留内容
-                deletedCount++;
-            }
-            
-            // #region agent log - 假设 E: 记录 sync 前状态
-            fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:beforeSync',message:'准备sync',data:{deletedCount,totalCCCount},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-            // #endregion
-            
-            await context.sync();
-            
-            // #region agent log - 假设 E: 记录 sync 后状态
-            fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:afterSync',message:'sync完成',data:{deletedCount},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-            // #endregion
         });
         
         // 清除 AI 表单项（如果撤销所有）
@@ -4703,7 +4741,25 @@ async function undoAutoEmbed() {
         
     } catch (error) {
         console.error("[Undo] 撤销失败:", error);
-        showNotification(`撤销失败: ${error.message}`, "error");
+        
+        // #region agent log - 捕获详细错误信息
+        const errorDetail = {
+            message: error.message,
+            name: error.name,
+            debugInfo: error.debugInfo ? JSON.stringify(error.debugInfo) : null,
+            stack: error.stack
+        };
+        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:undoAutoEmbed:error',message:'撤销失败详情',data:errorDetail,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'ERROR'})}).catch(()=>{});
+        
+        // 打印详细的 debugInfo
+        if (error.debugInfo) {
+            console.error("[Undo] debugInfo:", error.debugInfo);
+            showNotification(`撤销失败: ${error.message}\n详情: ${JSON.stringify(error.debugInfo)}`, "error");
+        } else {
+            showNotification(`撤销失败: ${error.message}`, "error");
+        }
+        // #endregion
+        
         btn.disabled = false;
         btn.innerHTML = originalHTML;
     }
