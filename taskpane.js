@@ -4671,37 +4671,47 @@ async function undoAutoEmbed() {
                 return;
             }
             
-            // V8: 使用 OOXML 移除 CC 标签但保留格式
+            // V9: 使用 OOXML 移除 CC 标签但保留格式（带详细日志）
             const totalCount = ccs.items.length;
-            console.log(`[Undo-V8] 准备处理 ${totalCount} 个 CC（保留格式）`);
+            console.log(`[Undo-V9] ========== 开始处理 ${totalCount} 个 CC ==========`);
+            
+            let successCount = 0;
+            let errorCount = 0;
+            const errors = [];
             
             // 反向处理每个 CC
             for (let i = totalCount - 1; i >= 0; i--) {
                 const cc = ccs.items[i];
+                const ccIndex = totalCount - i; // 1-based progress
                 
                 try {
-                    // 解锁
+                    // Step 1: 加载 CC 属性
+                    console.log(`[Undo-V9] [${ccIndex}/${totalCount}] Step1: 加载属性...`);
                     cc.load("tag, cannotDelete, cannotEdit");
                     await context.sync();
+                    console.log(`[Undo-V9] [${ccIndex}/${totalCount}] tag="${cc.tag}"`);
                     
+                    // Step 2: 解锁（如果需要）
                     if (cc.cannotDelete || cc.cannotEdit) {
+                        console.log(`[Undo-V9] [${ccIndex}/${totalCount}] Step2: 解锁...`);
                         cc.cannotDelete = false;
                         cc.cannotEdit = false;
                         await context.sync();
                     }
                     
-                    // 获取 CC 的 OOXML
+                    // Step 3: 获取 OOXML
+                    console.log(`[Undo-V9] [${ccIndex}/${totalCount}] Step3: 获取OOXML...`);
                     const ooxmlResult = cc.getOoxml();
                     await context.sync();
                     
                     let ooxml = ooxmlResult.value || "";
+                    console.log(`[Undo-V9] [${ccIndex}/${totalCount}] OOXML长度: ${ooxml.length}`);
                     
-                    if (ooxml) {
-                        // 移除 Content Control 标签，保留内部内容
-                        // <w:sdt>...</w:sdtContent>内容</w:sdtContent></w:sdt>
-                        // 只保留 <w:sdtContent>...</w:sdtContent> 里面的内容
+                    if (ooxml && ooxml.length > 0) {
+                        // Step 4: 移除 CC 标签
+                        console.log(`[Undo-V9] [${ccIndex}/${totalCount}] Step4: 移除CC标签...`);
+                        const originalLength = ooxml.length;
                         
-                        // 方法1: 移除 <w:sdt> 和 </w:sdt> 以及 <w:sdtPr>...</w:sdtPr>
                         ooxml = ooxml.replace(/<w:sdt[^>]*>/g, '');
                         ooxml = ooxml.replace(/<\/w:sdt>/g, '');
                         ooxml = ooxml.replace(/<w:sdtPr>[\s\S]*?<\/w:sdtPr>/g, '');
@@ -4710,23 +4720,34 @@ async function undoAutoEmbed() {
                         ooxml = ooxml.replace(/<w:sdtContent>/g, '');
                         ooxml = ooxml.replace(/<\/w:sdtContent>/g, '');
                         
-                        // 用处理后的 OOXML 替换
+                        console.log(`[Undo-V9] [${ccIndex}/${totalCount}] 处理后OOXML: ${originalLength} -> ${ooxml.length}`);
+                        
+                        // Step 5: 用处理后的 OOXML 替换
+                        console.log(`[Undo-V9] [${ccIndex}/${totalCount}] Step5: insertOoxml...`);
                         const range = cc.getRange();
                         range.insertOoxml(ooxml, "Replace");
                         await context.sync();
                         
-                        deletedCount++;
-                        
-                        if (deletedCount % 10 === 0 || deletedCount === 1) {
-                            console.log(`[Undo-V8] 进度: ${deletedCount}/${totalCount}, tag="${cc.tag}"`);
-                        }
+                        successCount++;
+                        console.log(`[Undo-V9] [${ccIndex}/${totalCount}] ✅ 成功！累计: ${successCount}`);
+                    } else {
+                        console.warn(`[Undo-V9] [${ccIndex}/${totalCount}] ⚠️ OOXML为空，跳过`);
                     }
                 } catch (err) {
-                    console.warn(`[Undo-V8] 处理 CC[${i}] 失败: ${err.message}`);
+                    errorCount++;
+                    const errMsg = `CC[${i}] tag=${cc.tag || '?'}: ${err.message}`;
+                    errors.push(errMsg);
+                    console.error(`[Undo-V9] [${ccIndex}/${totalCount}] ❌ 失败: ${err.message}`);
                 }
             }
             
-            console.log(`[Undo-V3-Step] 5. 完成！成功删除 ${deletedCount}/${ccs.items.length} 个 CC`);
+            console.log(`[Undo-V9] ========== 处理完成 ==========`);
+            console.log(`[Undo-V9] 成功: ${successCount}, 失败: ${errorCount}, 总计: ${totalCount}`);
+            if (errors.length > 0) {
+                console.log(`[Undo-V9] 错误列表:`, errors.slice(0, 5));
+            }
+            
+            deletedCount = successCount;
             
             // 验证：重新加载检查是否真的删除了
             const verifyControls = context.document.contentControls;
