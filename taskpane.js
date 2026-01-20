@@ -4619,19 +4619,18 @@ async function undoAutoEmbed() {
                     
                     console.log(`[Undo-V3-Delete] CC[${i}], 保存文本="${savedText.substring(0, 30)}..."`);
                     
-                    // 2. 获取 CC 之前的位置（用于插入恢复的文本）
-                    const insertRange = range.getRange("Start");
+                    // 2. 先在 CC 之后插入文本（这样删除 CC 时不会影响新文本）
+                    if (savedText && savedText.trim()) {
+                        const afterRange = range.getRange("After");
+                        afterRange.insertText(savedText, "Before");
+                        await context.sync();
+                        console.log(`[Undo-V3-Delete] 已在CC后插入文本`);
+                    }
                     
-                    // 3. 删除 CC（会同时删除内容）
+                    // 3. 删除 CC（会同时删除原内容，但新文本已在后面）
                     cc.delete(true);
                     await context.sync();
-                    
-                    // 4. 在原位置重新插入保存的文本
-                    if (savedText && savedText.trim()) {
-                        insertRange.insertText(savedText, "Replace");
-                        await context.sync();
-                        console.log(`[Undo-V3-Delete] 已恢复文本: "${savedText.substring(0, 20)}..."`);
-                    }
+                    console.log(`[Undo-V3-Delete] 已删除CC`);
                     
                     deletedCount++;
                     
