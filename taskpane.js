@@ -877,6 +877,14 @@ function saveFormConfig() {
         localStorage.setItem(FORM_CONFIG_KEY, JSON.stringify(contractConfig));
         localStorage.setItem(FORM_CONFIG_VERSION_KEY, CURRENT_CONFIG_VERSION);
         console.log("[FormConfig] 配置已保存到 LocalStorage");
+        
+        // 同时保存自定义字段到文档
+        const customFields = collectCustomFields();
+        if (customFields.length > 0) {
+            saveCustomFieldsToDocument(customFields).catch(err => {
+                console.warn("[FormConfig] 保存自定义字段到文档失败:", err);
+            });
+        }
     } catch (e) {
         console.warn("[FormConfig] 保存失败:", e.message);
     }
@@ -2961,6 +2969,9 @@ const DOUBAO_API = {
 // AI 识别字段存储 Key
 const AI_FIELDS_KEY = "ai_recognized_fields";
 
+// 自定义字段存储 Key
+const CUSTOM_FIELDS_KEY = "custom_fields";
+
 // 可用的分类 Section 列表
 const AI_SECTION_CATEGORIES = [
     { id: "section_company_info", name: "公司基本信息", examples: "公司名称、注册资本、法定代表人、注册地址" },
@@ -3469,6 +3480,82 @@ async function loadAIFieldsFromDocument() {
         console.warn("[AI Storage] 加载失败:", error);
         return [];
     }
+}
+
+/**
+ * 将自定义字段存储到文档 Settings
+ */
+async function saveCustomFieldsToDocument(customFields) {
+    console.log(`[Custom Storage] 保存 ${customFields.length} 个自定义字段到文档...`);
+    
+    try {
+        await Word.run(async (context) => {
+            const settings = context.document.settings;
+            await saveToSettingsChunked(context, settings, CUSTOM_FIELDS_KEY, JSON.stringify(customFields));
+            await context.sync();
+        });
+        console.log("[Custom Storage] 保存成功");
+    } catch (error) {
+        console.error("[Custom Storage] 保存失败:", error);
+    }
+}
+
+/**
+ * 从文档 Settings 加载自定义字段
+ */
+async function loadCustomFieldsFromDocument() {
+    console.log("[Custom Storage] 从文档加载自定义字段...");
+    
+    try {
+        return await Word.run(async (context) => {
+            const settings = context.document.settings;
+            settings.load("items");
+            await context.sync();
+            
+            const data = await readFromSettingsChunked(context, settings, CUSTOM_FIELDS_KEY);
+            if (data) {
+                const fields = JSON.parse(data);
+                console.log(`[Custom Storage] 加载了 ${fields.length} 个自定义字段`);
+                return fields;
+            }
+            return [];
+        });
+    } catch (error) {
+        console.warn("[Custom Storage] 加载失败:", error);
+        return [];
+    }
+}
+
+/**
+ * 收集 contractConfig 中的所有自定义字段
+ */
+function collectCustomFields() {
+    const customFields = [];
+    
+    contractConfig.forEach(section => {
+        if (section.fields) {
+            section.fields.forEach(field => {
+                if (field.isCustom) {
+                    customFields.push({
+                        ...field,
+                        sectionId: section.id  // 记录所属 section
+                    });
+                }
+            });
+        }
+    });
+    
+    // 也包含待放置的字段
+    pendingFields.forEach(field => {
+        if (field.isCustom) {
+            customFields.push({
+                ...field,
+                isPending: true  // 标记为待放置
+            });
+        }
+    });
+    
+    return customFields;
 }
 
 /**
@@ -6366,6 +6453,44 @@ if (typeof Office !== 'undefined') {
             console.warn("[Init] 加载 AI 字段失败:", e);
         }
         
+        // 4a. 【新增】加载自定义字段并恢复到配置中
+        try {
+            const customFields = await loadCustomFieldsFromDocument();
+            if (customFields && customFields.length > 0) {
+                console.log(`[Init] 从文档加载了 ${customFields.length} 个自定义字段`);
+                
+                // 恢复字段到 contractConfig 或 pendingFields
+                customFields.forEach(field => {
+                    if (field.isPending) {
+                        // 恢复到待放置区
+                        if (!pendingFields.some(f => f.tag === field.tag)) {
+                            const restoredField = { ...field };
+                            delete restoredField.isPending;
+                            pendingFields.push(restoredField);
+                        }
+                    } else if (field.sectionId) {
+                        // 恢复到指定 section
+                        const targetSection = contractConfig.find(s => s.id === field.sectionId);
+                        if (targetSection && targetSection.fields) {
+                            // 检查是否已存在（避免重复）
+                            if (!targetSection.fields.some(f => f.tag === field.tag)) {
+                                const restoredField = { ...field };
+                                delete restoredField.sectionId;
+                                targetSection.fields.push(restoredField);
+                            }
+                        }
+                    }
+                });
+                
+                // 如果恢复了字段，重新构建表单
+                buildForm();
+                renderCustomFieldsPanel();
+                console.log(`[Init] 自定义字段已恢复`);
+            }
+        } catch (e) {
+            console.warn("[Init] 加载自定义字段失败:", e);
+        }
+        
         // 5. 绑定紧急工具按钮
         bindEmergencyTools();
         
@@ -8103,7 +8228,8 @@ function addCustomFieldFromModal() {
         tag,
         type,
         options: options.length > 0 ? options : undefined,
-        hasParagraphToggle: insertMode === "paragraph" || insertMode === "both"
+        hasParagraphToggle: insertMode === "paragraph" || insertMode === "both",
+        isCustom: true  // 标记为自定义字段
     };
     
     // 添加到待放置区
