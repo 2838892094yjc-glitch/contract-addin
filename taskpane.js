@@ -4611,21 +4611,29 @@ async function undoAutoEmbed() {
                         await context.sync();
                     }
                     
-                    // 测试：使用 delete(true) 看是否能真正删除
-                    // 注意：这可能会删除内容，我们需要先保存
+                    // 1. 获取 CC 的范围和文本
                     const range = cc.getRange();
                     range.load("text");
                     await context.sync();
                     const savedText = range.text;
                     
-                    console.log(`[Undo-V3-Delete] 尝试删除 CC[${i}], text="${savedText.substring(0, 30)}..."`);
+                    console.log(`[Undo-V3-Delete] CC[${i}], 保存文本="${savedText.substring(0, 30)}..."`);
                     
-                    // 尝试 delete(true)
+                    // 2. 获取 CC 之前的位置（用于插入恢复的文本）
+                    const insertRange = range.getRange("Start");
+                    
+                    // 3. 删除 CC（会同时删除内容）
                     cc.delete(true);
                     await context.sync();
-                    deletedCount++;
                     
-                    console.log(`[Undo-V3-Delete] 删除后，文本应该是: "${savedText.substring(0, 30)}..."`);
+                    // 4. 在原位置重新插入保存的文本
+                    if (savedText && savedText.trim()) {
+                        insertRange.insertText(savedText, "Replace");
+                        await context.sync();
+                        console.log(`[Undo-V3-Delete] 已恢复文本: "${savedText.substring(0, 20)}..."`);
+                    }
+                    
+                    deletedCount++;
                     
                     if (i === 0 || i === ccs.items.length - 1 || i % 5 === 0) {
                         console.log(`[Undo-V3-Step] 已删除 ${i + 1}/${ccs.items.length}`);
