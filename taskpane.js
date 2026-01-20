@@ -4671,56 +4671,58 @@ async function undoAutoEmbed() {
                 return;
             }
             
-            // V7: 使用 insertText 替换 CC 来移除框架
+            // V8: 使用 OOXML 移除 CC 标签但保留格式
             const totalCount = ccs.items.length;
-            console.log(`[Undo-V7] 准备处理 ${totalCount} 个 CC`);
+            console.log(`[Undo-V8] 准备处理 ${totalCount} 个 CC（保留格式）`);
             
-            // 先收集所有 CC 的信息（避免遍历时集合变化）
-            const ccInfos = [];
-            for (const cc of ccs.items) {
-                cc.load("tag, text, cannotDelete, cannotEdit");
-            }
-            await context.sync();
-            
-            for (const cc of ccs.items) {
-                ccInfos.push({
-                    cc: cc,
-                    tag: cc.tag,
-                    text: cc.text,
-                    cannotDelete: cc.cannotDelete
-                });
-            }
-            
-            console.log(`[Undo-V7] 已收集 ${ccInfos.length} 个 CC 信息`);
-            
-            // 反向处理
-            for (let i = ccInfos.length - 1; i >= 0; i--) {
-                const info = ccInfos[i];
-                const cc = info.cc;
+            // 反向处理每个 CC
+            for (let i = totalCount - 1; i >= 0; i--) {
+                const cc = ccs.items[i];
                 
                 try {
                     // 解锁
-                    if (info.cannotDelete || info.cannotEdit) {
+                    cc.load("tag, cannotDelete, cannotEdit");
+                    await context.sync();
+                    
+                    if (cc.cannotDelete || cc.cannotEdit) {
                         cc.cannotDelete = false;
                         cc.cannotEdit = false;
                         await context.sync();
                     }
                     
-                    // 方法：获取 CC 的 Range，用纯文本替换整个范围
-                    const text = info.text || "";
-                    const range = cc.getRange();
-                    
-                    // 用纯文本替换 CC 范围（会移除 CC 框架）
-                    range.insertText(text, "Replace");
+                    // 获取 CC 的 OOXML
+                    const ooxmlResult = cc.getOoxml();
                     await context.sync();
                     
-                    deletedCount++;
+                    let ooxml = ooxmlResult.value || "";
                     
-                    if (deletedCount % 10 === 0 || deletedCount === 1) {
-                        console.log(`[Undo-V7] 进度: ${deletedCount}/${totalCount}, tag="${info.tag}"`);
+                    if (ooxml) {
+                        // 移除 Content Control 标签，保留内部内容
+                        // <w:sdt>...</w:sdtContent>内容</w:sdtContent></w:sdt>
+                        // 只保留 <w:sdtContent>...</w:sdtContent> 里面的内容
+                        
+                        // 方法1: 移除 <w:sdt> 和 </w:sdt> 以及 <w:sdtPr>...</w:sdtPr>
+                        ooxml = ooxml.replace(/<w:sdt[^>]*>/g, '');
+                        ooxml = ooxml.replace(/<\/w:sdt>/g, '');
+                        ooxml = ooxml.replace(/<w:sdtPr>[\s\S]*?<\/w:sdtPr>/g, '');
+                        ooxml = ooxml.replace(/<w:sdtEndPr[^>]*\/>/g, '');
+                        ooxml = ooxml.replace(/<w:sdtEndPr>[\s\S]*?<\/w:sdtEndPr>/g, '');
+                        ooxml = ooxml.replace(/<w:sdtContent>/g, '');
+                        ooxml = ooxml.replace(/<\/w:sdtContent>/g, '');
+                        
+                        // 用处理后的 OOXML 替换
+                        const range = cc.getRange();
+                        range.insertOoxml(ooxml, "Replace");
+                        await context.sync();
+                        
+                        deletedCount++;
+                        
+                        if (deletedCount % 10 === 0 || deletedCount === 1) {
+                            console.log(`[Undo-V8] 进度: ${deletedCount}/${totalCount}, tag="${cc.tag}"`);
+                        }
                     }
                 } catch (err) {
-                    console.warn(`[Undo-V7] 处理 CC[${i}] 失败: ${err.message}`);
+                    console.warn(`[Undo-V8] 处理 CC[${i}] 失败: ${err.message}`);
                 }
             }
             
