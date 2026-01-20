@@ -4170,6 +4170,76 @@ async function getAllContentControlTags() {
 /**
  * AI 识别核心逻辑（不含确认对话框）
  */
+/**
+ * 使用新 Skill 系统的 AI 识别核心函数
+ */
+async function aiRecognizeCoreWithSkill() {
+    console.log("[AI Skill Core] ========== 开始 AI Skill 智能识别 ==========");
+    
+    try {
+        // Step 1: 读取文档文本
+        const docText = await getDocumentText();
+        console.log(`[AI Skill Core] 文档文本长度: ${docText.length}`);
+        
+        if (docText.length < 50) {
+            console.log("[AI Skill Core] 文档内容太少，跳过 AI 分析");
+            return { success: 0, failed: 0 };
+        }
+        
+        // Step 2: 调用 AI Skill 分析
+        console.log("[AI Skill Core] 调用 AI Skill...");
+        const aiOutput = await window.AISkill.analyzeDocument(docText);
+        
+        // Step 3: 验证 AI 输出
+        const validation = window.AIParser.validateAIOutput(aiOutput);
+        if (!validation.valid) {
+            console.error("[AI Skill Core] AI 输出验证失败:", validation.errors);
+            showNotification("AI 识别失败: " + validation.errors[0], "error");
+            return { success: 0, failed: 0, errors: validation.errors };
+        }
+        
+        console.log(`[AI Skill Core] AI 识别到 ${aiOutput.variables.length} 个变量`);
+        
+        // 记录未知格式
+        window.AIParser.logUnknownFormats(aiOutput);
+        
+        // Step 4: 批量埋点
+        console.log("[AI Skill Core] 开始批量埋点...");
+        
+        const embedResult = await Word.run(async (context) => {
+            return await window.EmbedLogic.embedAllVariables(
+                context.document,
+                aiOutput.variables,
+                {
+                    onProgress: (current, total, label) => {
+                        if (current % 5 === 0 || current === total) {
+                            console.log(`[AI Skill Core] 埋点进度: ${current}/${total}`);
+                        }
+                    }
+                }
+            );
+        });
+        
+        console.log("[AI Skill Core] 埋点完成:");
+        console.log(`  成功: ${embedResult.success}`);
+        console.log(`  失败: ${embedResult.failed}`);
+        
+        if (embedResult.failed > 0) {
+            console.warn("[AI Skill Core] 部分埋点失败:");
+            console.table(embedResult.errors.slice(0, 10)); // 只显示前10个错误
+        }
+        
+        return embedResult;
+        
+    } catch (error) {
+        console.error("[AI Skill Core] 错误:", error);
+        return { success: 0, failed: 0, errors: [error.message] };
+    }
+}
+
+/**
+ * 原有的 AI 识别核心函数（保留作为备份）
+ */
 async function aiRecognizeCore() {
     console.log("[AI Core] ========== 开始 AI 智能识别 ==========");
     
@@ -4497,11 +4567,11 @@ async function autoGenerateForm() {
         const beforeTags = await getAllContentControlTags();
         console.log(`[AutoGenerate] 现有埋点数量: ${beforeTags.length}`);
         
-        // Step 3: 执行 AI 识别（AI 会同时处理【】占位符和其他变量）
-        btn.innerHTML = '<i class="ms-Icon ms-Icon--Sync"></i> AI 分析中...';
-        console.log("[AutoGenerate] Step 3: 执行 AI 识别（包含【】占位符）...");
-        const aiResult = await aiRecognizeCore();
-        console.log(`[AutoGenerate] AI 识别结果: 成功 ${aiResult.success}, 跳过 ${aiResult.skipped}`);
+        // Step 3: 执行 AI 识别（使用新 Skill 系统）
+        btn.innerHTML = '<i class="ms-Icon ms-Icon--Sync"></i> AI Skill 分析中...';
+        console.log("[AutoGenerate] Step 3: 执行 AI Skill 识别...");
+        const aiResult = await aiRecognizeCoreWithSkill();
+        console.log(`[AutoGenerate] AI Skill 识别结果: 成功 ${aiResult.success}, 失败 ${aiResult.failed}`);
         
         // Step 4: 记录新增埋点
         const afterTags = await getAllContentControlTags();
@@ -4519,7 +4589,13 @@ async function autoGenerateForm() {
         }
         
         // 完成通知
-        showNotification(`生成完成！新增 ${aiResult.success || 0} 个埋点`, "success", 5000);
+        const totalEmbedded = aiResult.success || 0;
+        const failedCount = aiResult.failed || 0;
+        let message = `生成完成！成功 ${totalEmbedded} 个埋点`;
+        if (failedCount > 0) {
+            message += `，失败 ${failedCount} 个（详见控制台）`;
+        }
+        showNotification(message, totalEmbedded > 0 ? "success" : "warning", 5000);
         console.log("[AutoGenerate] ========== 完成 ==========");
         
     } catch (error) {
@@ -4611,27 +4687,20 @@ async function undoAutoEmbed() {
                         await context.sync();
                     }
                     
-                    // 1. 获取 CC 的范围和文本
+                    // 方法：用纯文本直接替换 CC（不是删除再插入）
+                    // 获取 CC 内的文本
+                    cc.load("text");
+                    await context.sync();
+                    const savedText = cc.text;
+                    
+                    console.log(`[Undo-V4] CC[${i}], text="${savedText.substring(0, 30)}..."`);
+                    
+                    // 获取 CC 的范围，用纯文本替换整个 CC
                     const range = cc.getRange();
-                    range.load("text");
+                    range.insertText(savedText, "Replace");
                     await context.sync();
-                    const savedText = range.text;
                     
-                    console.log(`[Undo-V3-Delete] CC[${i}], 保存文本="${savedText.substring(0, 30)}..."`);
-                    
-                    // 2. 先在 CC 之后插入文本（这样删除 CC 时不会影响新文本）
-                    if (savedText && savedText.trim()) {
-                        const afterRange = range.getRange("After");
-                        afterRange.insertText(savedText, "Before");
-                        await context.sync();
-                        console.log(`[Undo-V3-Delete] 已在CC后插入文本`);
-                    }
-                    
-                    // 3. 删除 CC（会同时删除原内容，但新文本已在后面）
-                    cc.delete(true);
-                    await context.sync();
-                    console.log(`[Undo-V3-Delete] 已删除CC`);
-                    
+                    console.log(`[Undo-V4] 已用纯文本替换 CC[${i}]`);
                     deletedCount++;
                     
                     if (i === 0 || i === ccs.items.length - 1 || i % 5 === 0) {
