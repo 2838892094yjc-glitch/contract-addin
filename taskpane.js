@@ -4715,13 +4715,23 @@ async function autoGenerateForm() {
  */
 async function checkAndShowUndoButton() {
     try {
-        const allTags = await getAllContentControlTags();
+        // 直接检测所有 Content Controls（不管有没有 tag）
+        let ccCount = 0;
+        await Word.run(async (context) => {
+            const ccs = context.document.contentControls;
+            ccs.load("items");
+            await context.sync();
+            ccCount = ccs.items.length;
+        });
+        
         const undoBtn = document.getElementById('btn-undo-embed');
         
-        if (undoBtn && allTags.length > 0) {
+        if (undoBtn && ccCount > 0) {
             undoBtn.style.display = 'block';
-            undoBtn.title = `撤销所有 ${allTags.length} 个埋点`;
-            console.log(`[Init] 检测到 ${allTags.length} 个埋点，显示撤销按钮`);
+            undoBtn.title = `撤销所有 ${ccCount} 个埋点`;
+            console.log(`[Init] 检测到 ${ccCount} 个 Content Control，显示撤销按钮`);
+        } else {
+            console.log(`[Init] 没有检测到 Content Control，按钮保持隐藏`);
         }
     } catch (e) {
         console.warn("[Init] 检查撤销按钮失败:", e);
