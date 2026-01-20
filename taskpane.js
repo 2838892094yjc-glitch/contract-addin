@@ -3699,9 +3699,12 @@ function createAIFieldElement(field, isNested = false) {
         `;
         
         // 输入时同步到文档
+        // #region agent log
         input.addEventListener('input', debounce(async () => {
+            console.log(`[DEBUG-INPUT] AI字段输入触发: tag=${pinyinTag}, value="${input.value}"`);
             await applyAIFieldToDocument(pinyinTag, input.value || `[${field.label}]`);
         }, 500));
+        // #endregion
         
         wrapper.appendChild(input);
     }
@@ -3895,23 +3898,44 @@ async function toggleParagraph(tag, button) {
  * 将 AI 字段值同步到文档中的 Content Control
  */
 async function applyAIFieldToDocument(tag, value) {
+    // #region agent log
+    console.log(`[DEBUG-SYNC] applyAIFieldToDocument 开始: tag="${tag}", value="${value}"`);
+    // #endregion
     try {
         await Word.run(async (context) => {
             const contentControls = context.document.contentControls;
             contentControls.load("items");
             await context.sync();
             
+            // #region agent log
+            console.log(`[DEBUG-SYNC] 文档中共有 ${contentControls.items.length} 个 Content Control`);
+            // #endregion
+            
             for (const cc of contentControls.items) {
                 cc.load("tag");
             }
             await context.sync();
             
+            // #region agent log
+            const allTags = contentControls.items.map(cc => cc.tag);
+            console.log(`[DEBUG-SYNC] 所有 CC tags: ${JSON.stringify(allTags.slice(0, 10))}...`);
+            // #endregion
+            
+            let foundMatch = false;
             for (const cc of contentControls.items) {
                 if (cc.tag === tag) {
+                    foundMatch = true;
                     await insertTextPreserveFormat(cc, value, context);
                     console.log(`[AI Sync] 已更新 ${tag}: ${value}`);
                 }
             }
+            
+            // #region agent log
+            if (!foundMatch) {
+                console.warn(`[DEBUG-SYNC] 未找到匹配的 Content Control: tag="${tag}"`);
+            }
+            // #endregion
+            
             await context.sync();
         });
     } catch (error) {
