@@ -4687,20 +4687,18 @@ async function undoAutoEmbed() {
                         await context.sync();
                     }
                     
-                    // 方法：用纯文本直接替换 CC（不是删除再插入）
-                    // 获取 CC 内的文本
-                    cc.load("text");
-                    await context.sync();
-                    const savedText = cc.text;
-                    
-                    console.log(`[Undo-V4] CC[${i}], text="${savedText.substring(0, 30)}..."`);
-                    
-                    // 获取 CC 的范围，用纯文本替换整个 CC
-                    const range = cc.getRange();
-                    range.insertText(savedText, "Replace");
+                    // 直接删除 CC 框架，保留内容
+                    // delete(keepContent=true) 应该只删除框架，保留文字
+                    cc.load("tag, text");
                     await context.sync();
                     
-                    console.log(`[Undo-V4] 已用纯文本替换 CC[${i}]`);
+                    console.log(`[Undo-V5] CC[${i}] tag="${cc.tag}", text="${cc.text.substring(0, 20)}..."`);
+                    
+                    // keepContent = true 表示保留内容
+                    cc.delete(true);
+                    await context.sync();
+                    
+                    console.log(`[Undo-V5] 已删除 CC[${i}] 框架（保留内容）`);
                     deletedCount++;
                     
                     if (i === 0 || i === ccs.items.length - 1 || i % 5 === 0) {
