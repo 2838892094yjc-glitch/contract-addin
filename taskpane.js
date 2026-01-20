@@ -4671,42 +4671,39 @@ async function undoAutoEmbed() {
                 return;
             }
             
-            // 逐个删除 CC（每删除一个就 sync 一次，避免引用失效）
-            console.log(`[Undo-V3-Step] 4. 准备逐个删除 ${ccs.items.length} 个 CC`);
+            // 逐个删除 CC - 反向遍历避免索引变化问题
+            const totalCount = ccs.items.length;
+            console.log(`[Undo-V6] 准备反向遍历删除 ${totalCount} 个 CC`);
             
-            // 逐个删除（每次都 sync）
-            for (let i = 0; i < ccs.items.length; i++) {
+            // 反向遍历删除（从最后一个开始）
+            for (let i = totalCount - 1; i >= 0; i--) {
                 const cc = ccs.items[i];
                 
                 try {
-                    // 先解锁（如果被锁定）
+                    cc.load("tag, text, cannotDelete");
+                    await context.sync();
+                    
+                    // 先解锁
                     if (cc.cannotDelete) {
-                        console.log(`[Undo-V3-Step] 解锁 CC[${i}]: ${cc.tag}`);
                         cc.cannotDelete = false;
                         cc.cannotEdit = false;
                         await context.sync();
                     }
                     
-                    // 直接删除 CC 框架，保留内容
-                    // delete(keepContent=true) 应该只删除框架，保留文字
-                    cc.load("tag, text");
-                    await context.sync();
+                    const textPreview = cc.text ? cc.text.substring(0, 20) : "(empty)";
+                    console.log(`[Undo-V6] 删除 CC[${i}] tag="${cc.tag}", text="${textPreview}..."`);
                     
-                    console.log(`[Undo-V5] CC[${i}] tag="${cc.tag}", text="${cc.text.substring(0, 20)}..."`);
-                    
-                    // keepContent = true 表示保留内容
+                    // delete(true) = keepContent = 保留内容，只删除框架
                     cc.delete(true);
                     await context.sync();
                     
-                    console.log(`[Undo-V5] 已删除 CC[${i}] 框架（保留内容）`);
                     deletedCount++;
                     
-                    if (i === 0 || i === ccs.items.length - 1 || i % 5 === 0) {
-                        console.log(`[Undo-V3-Step] 已删除 ${i + 1}/${ccs.items.length}`);
+                    if (deletedCount % 5 === 0 || deletedCount === 1) {
+                        console.log(`[Undo-V6] 进度: ${deletedCount}/${totalCount}`);
                     }
                 } catch (delErr) {
-                    console.warn(`[Undo-V3-Step] 删除第 ${i + 1} 个 CC 失败: ${delErr.message}`);
-                    // 继续删除下一个
+                    console.warn(`[Undo-V6] 删除 CC[${i}] 失败: ${delErr.message}`);
                 }
             }
             
