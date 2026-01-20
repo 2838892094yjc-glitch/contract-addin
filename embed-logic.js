@@ -30,30 +30,20 @@ async function searchInDocument(doc, searchText, context = null) {
 }
 
 /**
- * 精确定位 placeholder（使用 context 验证）
+ * 基于 AI 输出创建单个 Content Control（在单个 Word.run 中完成）
  * @param {Word.Document} doc - Word 文档对象
  * @param {object} variable - AI 输出的变量对象
- * @returns {Promise<Word.Range|null>} 找到的 Range 对象
+ * @returns {Promise<boolean>} 是否成功
  */
-async function locatePlaceholder(doc, variable) {
-    const { context, prefix, placeholder, suffix } = variable;
+async function embedVariable(doc, variable) {
+    const { context, prefix, placeholder, suffix, label, tag, mode } = variable;
     
-    return await Word.run(async (wordContext) => {
-        // 策略 1: 搜索完整 context
-        let searchResults = doc.body.search(context, {
-            matchCase: false,
-            matchWholeWord: false
-        });
-        
-        wordContext.load(searchResults, 'items');
-        await wordContext.sync();
-        
-        if (searchResults.items.length === 0) {
-            console.warn(`[Embed] 未找到 context: ${context.substring(0, 100)}`);
+    try {
+        return await Word.run(async (wordContext) => {
+            // ==================== 阶段 1: 搜索定位 ====================
             
-            // 策略 2: 尝试搜索 prefix + placeholder + suffix
-            const fullText = prefix + placeholder + suffix;
-            searchResults = doc.body.search(fullText, {
+            // 策略 1: 搜索完整 context
+            let searchResults = doc.body.search(context, {
                 matchCase: false,
                 matchWholeWord: false
             });
@@ -61,97 +51,94 @@ async function locatePlaceholder(doc, variable) {
             wordContext.load(searchResults, 'items');
             await wordContext.sync();
             
+            let targetRange = null;
+            
             if (searchResults.items.length === 0) {
-                console.warn(`[Embed] 未找到完整文本: ${fullText.substring(0, 100)}`);
+                console.warn(`[Embed] 未找到 context: ${context.substring(0, 100)}`);
                 
-                // 策略 3: 尝试只搜索 placeholder（如果足够独特）
-                if (placeholder.length > 3 && placeholder !== '____') {
-                    searchResults = doc.body.search(placeholder, {
-                        matchCase: false,
-                        matchWholeWord: false
-                    });
+                // 策略 2: 尝试搜索 prefix + placeholder + suffix
+                const fullText = prefix + placeholder + suffix;
+                searchResults = doc.body.search(fullText, {
+                    matchCase: false,
+                    matchWholeWord: false
+                });
+                
+                wordContext.load(searchResults, 'items');
+                await wordContext.sync();
+                
+                if (searchResults.items.length === 0) {
+                    console.warn(`[Embed] 未找到完整文本: ${fullText.substring(0, 100)}`);
                     
-                    wordContext.load(searchResults, 'items');
-                    await wordContext.sync();
-                    
-                    if (searchResults.items.length > 0) {
-                        console.log(`[Embed] 通过 placeholder 找到 ${searchResults.items.length} 处`);
-                        return searchResults.items[0];
+                    // 策略 3: 尝试只搜索 placeholder（如果足够独特）
+                    if (placeholder && placeholder.length > 3 && placeholder !== '____') {
+                        searchResults = doc.body.search(placeholder, {
+                            matchCase: false,
+                            matchWholeWord: false
+                        });
+                        
+                        wordContext.load(searchResults, 'items');
+                        await wordContext.sync();
+                        
+                        if (searchResults.items.length > 0) {
+                            console.log(`[Embed] 通过 placeholder 找到 ${searchResults.items.length} 处`);
+                            targetRange = searchResults.items[0];
+                        }
                     }
+                    
+                    if (!targetRange) {
+                        console.error(`[Embed] 无法定位变量: ${label}`);
+                        return false;
+                    }
+                } else {
+                    targetRange = searchResults.items[0];
                 }
+            } else {
+                // 找到了 context，现在定位到 placeholder
+                const contextRange = searchResults.items[0];
                 
-                return null;
+                // 如果 prefix 为空，直接使用 context range
+                if (!prefix || prefix.length === 0) {
+                    targetRange = contextRange;
+                } else {
+                    // 计算 placeholder 在 context 中的位置
+                    const placeholderStart = prefix.length;
+                    const placeholderLength = placeholder.length;
+                    
+                    // 创建子 Range
+                    targetRange = contextRange.getRange('Start');
+                    targetRange.moveStart('Character', placeholderStart);
+                    targetRange.moveEnd('Character', placeholderLength);
+                    
+                    await wordContext.sync();
+                }
             }
-        }
-        
-        // 找到了 context，现在定位 placeholder
-        const contextRange = searchResults.items[0];
-        
-        // 计算 placeholder 在 context 中的位置
-        const placeholderStart = prefix.length;
-        const placeholderEnd = placeholderStart + placeholder.length;
-        
-        // 创建子 Range
-        const placeholderRange = contextRange.getRange('Start');
-        placeholderRange.moveStart('Character', placeholderStart);
-        placeholderRange.moveEnd('Character', placeholderEnd - placeholderStart);
-        
-        await wordContext.sync();
-        
-        console.log(`[Embed] 成功定位 placeholder: ${variable.label}`);
-        return placeholderRange;
-    });
-}
-
-// ==================== Content Control 创建 ====================
-
-/**
- * 在指定 Range 创建 Content Control
- * @param {Word.Range} range - 目标 Range
- * @param {object} variable - AI 输出的变量对象
- * @returns {Promise<Word.ContentControl>} 创建的 Content Control
- */
-async function createContentControl(range, variable) {
-    return await Word.run(async (wordContext) => {
-        const contentControl = range.insertContentControl();
-        
-        // 设置属性
-        contentControl.tag = variable.tag;
-        contentControl.title = variable.label;
-        contentControl.appearance = 'Tags';
-        contentControl.color = '#D1E8FF';
-        contentControl.cannotDelete = false;
-        contentControl.cannotEdit = false;
-        
-        await wordContext.sync();
-        
-        console.log(`[Embed] 创建 Content Control: ${variable.label} (${variable.tag})`);
-        return contentControl;
-    });
-}
-
-/**
- * 基于 AI 输出创建单个 Content Control
- * @param {Word.Document} doc - Word 文档对象
- * @param {object} variable - AI 输出的变量对象
- * @returns {Promise<boolean>} 是否成功
- */
-async function embedVariable(doc, variable) {
-    try {
-        // 1. 定位 placeholder
-        const range = await locatePlaceholder(doc, variable);
-        
-        if (!range) {
-            console.error(`[Embed] 无法定位变量: ${variable.label}`);
-            return false;
-        }
-        
-        // 2. 创建 Content Control
-        await createContentControl(range, variable);
-        
-        return true;
+            
+            // ==================== 阶段 2: 创建 Content Control ====================
+            
+            const contentControl = targetRange.insertContentControl();
+            
+            // 设置属性
+            contentControl.tag = tag;
+            contentControl.title = label;
+            contentControl.appearance = 'Tags';
+            
+            // 根据 mode 设置颜色
+            if (mode === 'paragraph') {
+                contentControl.color = '#FFE8D1';  // 橙色 - 可选段落
+            } else {
+                contentControl.color = '#D1E8FF';  // 蓝色 - 普通变量
+            }
+            
+            contentControl.cannotDelete = false;
+            contentControl.cannotEdit = false;
+            
+            await wordContext.sync();
+            
+            console.log(`[Embed] ✅ 成功创建: ${label} (${tag})`);
+            return true;
+        });
     } catch (error) {
-        console.error(`[Embed] 埋点失败 (${variable.label}):`, error);
+        console.error(`[Embed] 埋点失败 (${label}):`, error.message || error);
         return false;
     }
 }
@@ -303,9 +290,6 @@ if (typeof window !== 'undefined') {
         embedVariable,
         embedAllVariables,
         embedParagraph,
-        locatePlaceholder,
-        createContentControl,
-        searchInDocument,
         contentControlExists,
         getAllContentControls
     };
