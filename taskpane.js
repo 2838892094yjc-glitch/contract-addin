@@ -4044,11 +4044,8 @@ async function aiRecognizeAndEmbed() {
                         continue;
                     }
                     
-                    // 生成拼音 tag
-                    const pinyinTag = pinyin(variable.label, { toneType: 'none' })
-                        .split(' ')
-                        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-                        .join('');
+                    // 生成拼音 tag（使用统一函数确保与表单一致）
+                    const pinyinTag = generatePinyinTag(variable.label);
                     
                     // 创建 Content Control
                     const cc = range.insertContentControl("RichText");
@@ -4531,6 +4528,25 @@ async function autoGenerateForm() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalHTML;
+    }
+}
+
+/**
+ * 检查并显示撤销按钮
+ * 在页面加载时调用，如果文档中已有埋点则显示撤销按钮
+ */
+async function checkAndShowUndoButton() {
+    try {
+        const allTags = await getAllContentControlTags();
+        const undoBtn = document.getElementById('btn-undo-embed');
+        
+        if (undoBtn && allTags.length > 0) {
+            undoBtn.style.display = 'block';
+            undoBtn.title = `撤销所有 ${allTags.length} 个埋点`;
+            console.log(`[Init] 检测到 ${allTags.length} 个埋点，显示撤销按钮`);
+        }
+    } catch (e) {
+        console.warn("[Init] 检查撤销按钮失败:", e);
     }
 }
 
@@ -6222,6 +6238,13 @@ if (typeof Office !== 'undefined') {
             await registerContentControlEvents();
         } catch (e) {
             console.warn("[Init] Content Control 事件注册失败:", e);
+        }
+        
+        // 7. 【新增】检查并显示撤销按钮
+        try {
+            await checkAndShowUndoButton();
+        } catch (e) {
+            console.warn("[Init] 检查撤销按钮失败:", e);
         }
     });
 } else {
