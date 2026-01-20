@@ -4579,15 +4579,16 @@ async function undoAutoEmbed() {
             
             console.log(`[Undo-V3-Step] 2. 加载了 ${ccs.items.length} 个 CC`);
             
-            // 加载所有 tag
+            // 加载所有 tag 和关键属性
             for (const cc of ccs.items) {
-                cc.load("tag");
+                cc.load("tag, cannotDelete, cannotEdit");
             }
             await context.sync();
             
-            // 获取所有 tags
+            // 获取所有 tags 并检查属性
             const allCCTags = ccs.items.map(cc => cc.tag);
-            console.log(`[Undo-V3-Step] 3. 加载了 ${allCCTags.length} 个 tags`);
+            const lockedCCs = ccs.items.filter(cc => cc.cannotDelete);
+            console.log(`[Undo-V3-Step] 3. 加载了 ${allCCTags.length} 个 tags (${lockedCCs.length} 个被锁定)`);
             
             if (allCCTags.length === 0) {
                 console.log('[Undo-V3] 没有 Content Control，退出');
@@ -4602,20 +4603,46 @@ async function undoAutoEmbed() {
                 const cc = ccs.items[i];
                 
                 try {
-                    cc.delete(false); // false = 保留内容
+                    // 先解锁（如果被锁定）
+                    if (cc.cannotDelete) {
+                        console.log(`[Undo-V3-Step] 解锁 CC[${i}]: ${cc.tag}`);
+                        cc.cannotDelete = false;
+                        cc.cannotEdit = false;
+                        await context.sync();
+                    }
+                    
+                    // 测试：使用 delete(true) 看是否能真正删除
+                    // 注意：这可能会删除内容，我们需要先保存
+                    const range = cc.getRange();
+                    range.load("text");
+                    await context.sync();
+                    const savedText = range.text;
+                    
+                    console.log(`[Undo-V3-Delete] 尝试删除 CC[${i}], text="${savedText.substring(0, 30)}..."`);
+                    
+                    // 尝试 delete(true)
+                    cc.delete(true);
                     await context.sync();
                     deletedCount++;
+                    
+                    console.log(`[Undo-V3-Delete] 删除后，文本应该是: "${savedText.substring(0, 30)}..."`);
                     
                     if (i === 0 || i === ccs.items.length - 1 || i % 5 === 0) {
                         console.log(`[Undo-V3-Step] 已删除 ${i + 1}/${ccs.items.length}`);
                     }
                 } catch (delErr) {
-                    console.warn(`[Undo-V3-Step] 删除第 ${i + 1} 个 CC 失败:`, delErr.message);
+                    console.warn(`[Undo-V3-Step] 删除第 ${i + 1} 个 CC 失败: ${delErr.message}`);
                     // 继续删除下一个
                 }
             }
             
             console.log(`[Undo-V3-Step] 5. 完成！成功删除 ${deletedCount}/${ccs.items.length} 个 CC`);
+            
+            // 验证：重新加载检查是否真的删除了
+            const verifyControls = context.document.contentControls;
+            verifyControls.load("items");
+            await context.sync();
+            console.log(`[Undo-V3-Verify] 删除后剩余 ${verifyControls.items.length} 个 CC（删除前: ${ccs.items.length}）`);
         });
         
         // 清除 AI 表单项（如果撤销所有）
