@@ -4783,70 +4783,53 @@ async function undoAutoEmbed() {
                 return;
             }
             
-            // V11: 操作整个文档的 OOXML 来移除 CC
+            // V12: 隐藏 CC 外观（Word Online 不支持真正删除 CC）
             const totalCount = ccs.items.length;
-            console.log(`[Undo-V11] ========== 开始处理 ${totalCount} 个 CC ==========`);
-            console.log(`[Undo-V11] 方法：获取整个文档OOXML，移除CC标签，替换回去`);
+            console.log(`[Undo-V12] ========== 开始处理 ${totalCount} 个 CC ==========`);
+            console.log(`[Undo-V12] 注意：Word Online 不支持删除 CC，改为隐藏外观`);
             
-            try {
-                // Step 1: 获取整个文档的 OOXML
-                console.log(`[Undo-V11] Step1: 获取文档 OOXML...`);
-                const body = context.document.body;
-                const ooxmlResult = body.getOoxml();
-                await context.sync();
+            let successCount = 0;
+            
+            // 反向处理每个 CC
+            for (let i = totalCount - 1; i >= 0; i--) {
+                const cc = ccs.items[i];
+                const ccIndex = totalCount - i;
                 
-                let ooxml = ooxmlResult.value || "";
-                const originalLength = ooxml.length;
-                console.log(`[Undo-V11] 原始 OOXML 长度: ${originalLength}`);
-                
-                if (!ooxml || ooxml.length < 100) {
-                    console.error(`[Undo-V11] OOXML 获取失败或太短`);
-                    return;
-                }
-                
-                // Step 2: 统计 CC 标签数量
-                const sdtCount = (ooxml.match(/<w:sdt[ >]/g) || []).length;
-                console.log(`[Undo-V11] Step2: 发现 ${sdtCount} 个 <w:sdt> 标签`);
-                
-                // Step 3: 移除 CC 标签（保留内部内容）
-                console.log(`[Undo-V11] Step3: 移除 CC 标签...`);
-                
-                // 移除 CC 相关标签
-                ooxml = ooxml.replace(/<w:sdt[^>]*>/g, '');
-                ooxml = ooxml.replace(/<\/w:sdt>/g, '');
-                ooxml = ooxml.replace(/<w:sdtPr>[\s\S]*?<\/w:sdtPr>/g, '');
-                ooxml = ooxml.replace(/<w:sdtEndPr[^>]*\/>/g, '');
-                ooxml = ooxml.replace(/<w:sdtEndPr>[\s\S]*?<\/w:sdtEndPr>/g, '');
-                ooxml = ooxml.replace(/<w:sdtContent>/g, '');
-                ooxml = ooxml.replace(/<\/w:sdtContent>/g, '');
-                
-                const newLength = ooxml.length;
-                console.log(`[Undo-V11] 处理后 OOXML 长度: ${originalLength} -> ${newLength} (减少 ${originalLength - newLength})`);
-                
-                // Step 4: 验证处理后的 OOXML
-                const newSdtCount = (ooxml.match(/<w:sdt[ >]/g) || []).length;
-                console.log(`[Undo-V11] Step4: 处理后 <w:sdt> 数量: ${newSdtCount}`);
-                
-                if (newSdtCount > 0) {
-                    console.warn(`[Undo-V11] 警告：仍有 ${newSdtCount} 个未移除的 CC 标签`);
-                }
-                
-                // Step 5: 替换整个文档
-                console.log(`[Undo-V11] Step5: 替换文档内容...`);
-                body.insertOoxml(ooxml, "Replace");
-                await context.sync();
-                
-                console.log(`[Undo-V11] ✅ 文档替换完成`);
-                deletedCount = sdtCount;
-                
-            } catch (err) {
-                console.error(`[Undo-V11] ❌ 失败: ${err.message}`);
-                if (err.debugInfo) {
-                    console.error(`[Undo-V11] debugInfo:`, err.debugInfo);
+                try {
+                    cc.load("tag, appearance");
+                    await context.sync();
+                    
+                    console.log(`[Undo-V12] [${ccIndex}/${totalCount}] tag="${cc.tag}", 当前外观="${cc.appearance}"`);
+                    
+                    // 方法1: 设置外观为隐藏（如果支持）
+                    try {
+                        cc.appearance = "Hidden";
+                        await context.sync();
+                        console.log(`[Undo-V12] [${ccIndex}/${totalCount}] ✅ 已设置为 Hidden`);
+                        successCount++;
+                    } catch (appearanceErr) {
+                        console.log(`[Undo-V12] [${ccIndex}/${totalCount}] Hidden 不支持，尝试 BoundingBox...`);
+                        
+                        // 方法2: 设置为 BoundingBox（边框模式，比 Tags 更不显眼）
+                        try {
+                            cc.appearance = "BoundingBox";
+                            cc.color = "White"; // 白色边框，基本不可见
+                            await context.sync();
+                            console.log(`[Undo-V12] [${ccIndex}/${totalCount}] ✅ 已设置为白色 BoundingBox`);
+                            successCount++;
+                        } catch (e2) {
+                            console.warn(`[Undo-V12] [${ccIndex}/${totalCount}] ❌ 都失败了: ${e2.message}`);
+                        }
+                    }
+                } catch (err) {
+                    console.error(`[Undo-V12] [${ccIndex}/${totalCount}] ❌ 失败: ${err.message}`);
                 }
             }
             
-            console.log(`[Undo-V11] ========== 处理完成 ==========`);
+            console.log(`[Undo-V12] ========== 处理完成 ==========`);
+            console.log(`[Undo-V12] 成功隐藏: ${successCount}/${totalCount}`);
+            
+            deletedCount = successCount;
             
             // 验证：重新加载检查是否真的删除了
             const verifyControls = context.document.contentControls;
