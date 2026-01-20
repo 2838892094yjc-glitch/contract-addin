@@ -11,8 +11,8 @@ const SKILL_MD_PATH = './contract-variable-skill/Skill.md';
 // AI API 配置：使用 taskpane.js 中已定义的 DOUBAO_API 全局变量
 // （不要重复声明，否则会导致 "Identifier already declared" 错误）
 
-// 文档切片大小
-const CHUNK_SIZE = 10000;  // 字符
+// 文档切片大小（使用独特名称避免与 taskpane.js 中的 CHUNK_SIZE 冲突）
+const AI_SKILL_CHUNK_SIZE = 10000;  // 字符
 
 // ==================== Skill 加载 ====================
 
@@ -81,7 +81,7 @@ function getDefaultPrompt() {
  * @param {number} chunkSize - 每个片段的大小
  * @returns {array} 文档片段数组
  */
-function chunkDocument(text, chunkSize = CHUNK_SIZE) {
+function chunkDocument(text, chunkSize = AI_SKILL_CHUNK_SIZE) {
     if (text.length <= chunkSize) {
         return [text];
     }
@@ -242,7 +242,7 @@ async function analyzeDocument(fullText) {
     console.log('[AI Skill] 开始分析文档...');
     
     // 切分文档
-    const chunks = chunkDocument(fullText, CHUNK_SIZE);
+    const chunks = chunkDocument(fullText, AI_SKILL_CHUNK_SIZE);
     
     if (chunks.length === 1) {
         // 单个片段，直接调用
