@@ -4308,19 +4308,16 @@ async function aiRecognizeCoreWithSkill() {
         // Step 4: 批量埋点
         console.log("[AI Skill Core] 开始批量埋点...");
         
-        const embedResult = await Word.run(async (context) => {
-            return await window.EmbedLogic.embedAllVariables(
-                context.document,
-                aiOutput.variables,
-                {
-                    onProgress: (current, total, label) => {
-                        if (current % 5 === 0 || current === total) {
-                            console.log(`[AI Skill Core] 埋点进度: ${current}/${total}`);
-                        }
+        const embedResult = await window.EmbedLogic.embedAllVariables(
+            aiOutput.variables,
+            {
+                onProgress: (current, total, label) => {
+                    if (current % 5 === 0 || current === total) {
+                        console.log(`[AI Skill Core] 埋点进度: ${current}/${total}`);
                     }
                 }
-            );
-        });
+            }
+        );
         
         console.log("[AI Skill Core] 埋点完成:");
         console.log(`  成功: ${embedResult.success}`);

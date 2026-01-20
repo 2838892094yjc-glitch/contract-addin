@@ -31,11 +31,10 @@ async function searchInDocument(doc, searchText, context = null) {
 
 /**
  * 基于 AI 输出创建单个 Content Control（在单个 Word.run 中完成）
- * @param {Word.Document} doc - Word 文档对象
  * @param {object} variable - AI 输出的变量对象
  * @returns {Promise<boolean>} 是否成功
  */
-async function embedVariable(doc, variable) {
+async function embedVariable(variable) {
     const { context, prefix, placeholder, suffix, label, tag, mode } = variable;
     
     // 【调试】输出变量的详细信息
@@ -46,12 +45,15 @@ async function embedVariable(doc, variable) {
     console.log(`  suffix: "${suffix || 'undefined'}"`);
     
     try {
-        return await Word.run(async (wordContext) => {
+        return await Word.run(async (context) => {
+            // 获取文档（在当前 context 中）
+            const doc = context.document;
+            
             // ==================== 阶段 1: 搜索定位 ====================
             
             // 策略 1: 搜索完整 context
             console.log(`[Embed] 策略1: 搜索 context...`);
-            let searchResults = doc.body.search(context, {
+            let searchResults = doc.body.search(variable.context, {
                 matchCase: false,
                 matchWholeWord: false
             });
@@ -153,12 +155,11 @@ async function embedVariable(doc, variable) {
 
 /**
  * 批量埋点（基于 AI 输出）
- * @param {Word.Document} doc - Word 文档对象
  * @param {array} variables - AI 输出的变量数组
  * @param {object} options - 选项 { onProgress: function }
  * @returns {Promise<object>} { success: number, failed: number, errors: array }
  */
-async function embedAllVariables(doc, variables, options = {}) {
+async function embedAllVariables(variables, options = {}) {
     const { onProgress } = options;
     
     const results = {
@@ -173,7 +174,7 @@ async function embedAllVariables(doc, variables, options = {}) {
         const variable = variables[i];
         
         try {
-            const success = await embedVariable(doc, variable);
+            const success = await embedVariable(variable);
             
             if (success) {
                 results.success++;
