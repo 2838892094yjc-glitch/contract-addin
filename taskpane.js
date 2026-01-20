@@ -3497,64 +3497,63 @@ function renderAIFieldsInForm(aiFields) {
     
     console.log(`[AI Form] 去重后: ${uniqueFields.length} 个字段`);
     
-    // 按 sectionId 分组
-    const grouped = {};
-    uniqueFields.forEach(f => {
-        if (!grouped[f.sectionId]) grouped[f.sectionId] = [];
-        grouped[f.sectionId].push(f);
-    });
-    
-    // 为每个 section 添加 AI 字段（直接混入，不创建单独区域）
-    for (const [sectionId, fields] of Object.entries(grouped)) {
-        // 查找对应的 section 容器
-        const sectionHeader = document.querySelector(`[data-section-id="${sectionId}"]`);
-        let targetContainer = null;
-        
-        if (sectionHeader) {
-            // 找到 section 的字段容器
-            targetContainer = sectionHeader.closest('.form-section')?.querySelector('.section-fields');
-        }
-        
-        // 如果找不到特定 section，就放在表单容器末尾
-        if (!targetContainer) {
-            targetContainer = document.getElementById('dynamic-form-container');
-        }
-        
-        if (!targetContainer) continue;
-        
-        // 分离父级和子级字段
-        const parentFields = fields.filter(f => !f.parentTag);
-        const childFields = fields.filter(f => f.parentTag);
-        
-        // 直接将 AI 字段插入到 section 中（不创建单独区域）
-        parentFields.forEach(field => {
-            const wrapper = createAIFieldElement(field);
-            targetContainer.appendChild(wrapper);
-            
-            // 如果有子字段，渲染它们（缩进）
-            const childrenOfThis = childFields.filter(c => 
-                c.parentTag === generatePinyinTag(field.label)
-            );
-            childrenOfThis.forEach(child => {
-                const childWrapper = createAIFieldElement(child, true);
-                targetContainer.appendChild(childWrapper);
-            });
-        });
-        
-        // 渲染没有父级的子字段
-        const orphanChildren = childFields.filter(c => {
-            const hasParent = parentFields.some(p => 
-                generatePinyinTag(p.label) === c.parentTag
-            );
-            return !hasParent;
-        });
-        orphanChildren.forEach(child => {
-            const wrapper = createAIFieldElement(child);
-            targetContainer.appendChild(wrapper);
-        });
+    // 获取表单容器
+    const formContainer = document.getElementById('dynamic-form-container');
+    if (!formContainer) {
+        console.error("[AI Form] 找不到 dynamic-form-container");
+        return;
     }
     
-    console.log("[AI Form] 渲染完成");
+    // 创建一个专门的 AI 字段 section（放在表单末尾）
+    const aiSection = document.createElement('div');
+    aiSection.className = 'ai-fields-section';
+    aiSection.innerHTML = `
+        <div class="section-header-container" style="margin-top: 32px; margin-bottom: 16px;">
+            <h3 class="section-header-static" style="color: #6366f1;">
+                <span style="margin-right: 8px;">🤖</span>AI 识别的字段
+                <span style="font-size: 12px; font-weight: normal; color: #94a3b8; margin-left: 8px;">(${uniqueFields.length} 个)</span>
+            </h3>
+        </div>
+        <div class="ai-fields-container section-fields" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;"></div>
+    `;
+    
+    const aiFieldsContainer = aiSection.querySelector('.ai-fields-container');
+    
+    // 分离父级和子级字段
+    const parentFields = uniqueFields.filter(f => !f.parentTag);
+    const childFields = uniqueFields.filter(f => f.parentTag);
+    
+    // 渲染所有字段
+    parentFields.forEach(field => {
+        const wrapper = createAIFieldElement(field);
+        aiFieldsContainer.appendChild(wrapper);
+        
+        // 如果有子字段，渲染它们（缩进）
+        const childrenOfThis = childFields.filter(c => 
+            c.parentTag === generatePinyinTag(field.label)
+        );
+        childrenOfThis.forEach(child => {
+            const childWrapper = createAIFieldElement(child, true);
+            aiFieldsContainer.appendChild(childWrapper);
+        });
+    });
+    
+    // 渲染没有父级的子字段
+    const orphanChildren = childFields.filter(c => {
+        const hasParent = parentFields.some(p => 
+            generatePinyinTag(p.label) === c.parentTag
+        );
+        return !hasParent;
+    });
+    orphanChildren.forEach(child => {
+        const wrapper = createAIFieldElement(child);
+        aiFieldsContainer.appendChild(wrapper);
+    });
+    
+    // 添加到表单末尾
+    formContainer.appendChild(aiSection);
+    
+    console.log("[AI Form] 渲染完成，已添加 AI 字段 section");
 }
 
 /**
