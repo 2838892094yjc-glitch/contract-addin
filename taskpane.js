@@ -18,7 +18,6 @@ const CURRENT_CONFIG_VERSION = "v20260128_force_clean_v3"; // 再次升级版本
 let contractConfig = [];
 
 // 默认配置（清空硬编码，改为按需从 templates 加载）
-// 默认配置（清空硬编码，改为按需从 templates 加载）
 const DEFAULT_CONTRACT_CONFIG = [
     {
         id: "section_files",
