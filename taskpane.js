@@ -12,11 +12,12 @@
 // 配置存储 Key
 const FORM_CONFIG_KEY = "contract_addin:formConfig";
 const FORM_CONFIG_VERSION_KEY = "contract_addin:formConfigVersion";
-const CURRENT_CONFIG_VERSION = "v20260108e"; // 配置版本号，更新时修改
+const CURRENT_CONFIG_VERSION = "v20260128_force_clean_v3"; // 再次升级版本号以强制清理旧数据
 
 // 表单配置数组（动态加载）
 let contractConfig = [];
 
+// 默认配置（清空硬编码，改为按需从 templates 加载）
 // 默认配置（清空硬编码，改为按需从 templates 加载）
 const DEFAULT_CONTRACT_CONFIG = [
     {
@@ -51,337 +52,10 @@ async function loadPEVCTemplate() {
     buildForm();
     showNotification("PEVC 模板加载成功", "success");
 }
-window.loadPEVCTemplate = loadPEVCTemplate;                    "固定倍数": `拟回购股权的回购价格（"回购价格"）应当按照以下公式计算：
-
-回购价格 ＝ I × Y% + A
-
-I 为回购权人为获得拟回购股权实际支付的成本总额；
-
-Y 为回购倍数，即【RedemptionMultiple】%；
-
-A 为回购日之前公司已宣布分配但尚未向该回购权人实际支付的拟回购股权对应的全部分红或股息。`,
-                    "两者孰高(单利vs公允)": `拟回购股权的回购价格（"回购价格"）应取以下两者之较高者：
-
-（一）按以下公式计算的金额：I × (1 + R × N) + A
-
-I 为回购权人为获得拟回购股权实际支付的成本总额；
-
-R 为回购利率，即【RedemptionInterestRate】%；
-
-N 是一个分数，其分子为交割日至回购日之间所经过的天数，分母为365；
-
-A 为已宣布但尚未支付的分红或股息。
-
-（二）拟回购股权届时的公允市场价值或对应的公司净资产价值。`
-                },
-                subFields: [
-                    { id: "redemptionInterestRate", label: "单利年化利率(%)", tag: "RedemptionInterestRate", type: "number", value: "8" },
-                    { id: "redemptionCompoundRate", label: "复利年化利率(%)", tag: "RedemptionCompoundRate", type: "number", value: "10" },
-                    { id: "redemptionMultiple", label: "回购倍数(%)", tag: "RedemptionMultiple", type: "number", value: "150", placeholder: "如150表示1.5倍" }
-                ]
-            },
-            
-            // --- 期限与违约 ---
-            { type: "divider", label: "期限与违约" },
-            { id: "redemptionNotifyDays", label: "通知其他回购权人期限(工作日)", tag: "RedemptionNotifyDays", type: "number", value: "3", formatFn: "chineseNumber" },
-            { id: "redemptionPaymentDays", label: "回购支付期限(日)", tag: "RedemptionPaymentDays", type: "number", value: "40", formatFn: "chineseNumber" },
-            { id: "redemptionPenaltyRate", label: "违约金利率(每日万分之)", tag: "RedemptionPenaltyRate", type: "number", value: "5" },
-            { id: "redemptionAssetSaleDays", label: "资产变卖触发期限(日)", tag: "RedemptionAssetSaleDays", type: "number", value: "90", formatFn: "chineseNumber" },
-            
-            // --- 回购顺序 ---
-            { type: "divider", label: "回购顺序" },
-            { id: "redemptionPriorityHolder", label: "第一顺位(优先支付方)", tag: "RedemptionPriorityHolder", type: "text", value: "本轮投资方" },
-            { id: "redemptionSecondaryHolder", label: "第二顺位", tag: "RedemptionSecondaryHolder", type: "text", value: "投资方" },
-            
-            // --- 特殊限制条款 ---
-            { type: "divider", label: "特殊限制条款" },
-            { 
-                id: "redemptionCompanyFirst", 
-                label: "公司优先回购条款", 
-                tag: "RedemptionCompanyFirst", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true,
-                subFields: [
-                    { id: "redemptionCompanyFirstDays", label: "公司履约期限(日)", tag: "RedemptionCompanyFirstDays", type: "number", value: "120", formatFn: "chineseNumber" }
-                ]
-            },
-            { 
-                id: "redemptionFounderCap", 
-                label: "创始股东责任上限条款", 
-                tag: "RedemptionFounderCap", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            { id: "redemptionDirectorRight", label: "保留董事权利类型", tag: "RedemptionDirectorRight", type: "select", options: ["委派", "观察", "提名"] }
-        ]
-    },
-
-    // -------------------- 9. 其他优先权 --------------------
-    {
-        id: "section_other_rights",
-        header: { label: "9. 其他优先权", tag: "Section_OtherRights" },
-        fields: [
-            // --- IPO 自动转换 ---
-            { id: "ipo_auto_convert", label: "IPO自动转股机制", tag: "IPOAutoConvert", type: "radio", options: ["是", "否"] },
-            { id: "ipo_min_valuation", label: "合格IPO最低估值 (亿元)", tag: "IPOMinValuation", type: "number", value: "40" },
-            { id: "ipo_min_proceeds", label: "合格IPO最低募资额 (亿元)", tag: "IPOMinProceeds", type: "number", value: "10" },
-
-            // --- 信息权 ---
-            { id: "hasInfoRights", label: "信息权", tag: "HasInfoRights", type: "radio", options: ["是", "否"] },
-            { id: "report_annual", label: "年度财报提供期限 (年后x天)", tag: "ReportDays_Annual", type: "number", value: "45", formatFn: "chineseNumber" },
-            { id: "report_quarterly", label: "季度财报提供期限 (季后x天)", tag: "ReportDays_Quarterly", type: "number", value: "30", formatFn: "chineseNumber" },
-            { id: "report_monthly", label: "月度财报提供期限 (月后x天)", tag: "ReportDays_Monthly", type: "number", value: "15", formatFn: "chineseNumber" },
-            { id: "report_budget", label: "年度预算提供期限 (年后x天)", tag: "ReportDays_Budget", type: "number", value: "45", formatFn: "chineseNumber" },
-
-            // --- 其他条款 ---
-            { id: "hasMFN", label: "最优惠条款 (MFN)", tag: "HasMFN", type: "radio", options: ["是", "否"] },
-            { id: "hasNewProjectRight", label: "新项目投资权 (创始人再创业)", tag: "HasNewProjectRight", type: "radio", options: ["是", "否"] }
-        ]
-    },
-
-    // -------------------- 10. 其他文件 --------------------
-    {
-        id: "section_other_docs",
-        header: { label: "10. 其他文件", tag: "Section_OtherDocs" },
-        fields: [
-            { id: "nonCompetePromise", label: "该公司是否应出具不竞争承诺函", tag: "NonCompetePromise", type: "radio", options: ["是", "否"] },
-            { id: "ipTransferAgreement", label: "知识产权转让协议", tag: "IPTransferAgreement", type: "radio", options: ["适用", "不适用"] },
-            { id: "shareTransferConfirm", label: "历史转股确认函", tag: "ShareTransferConfirm", type: "radio", options: ["适用", "不适用"] },
-            { id: "nomineeAgreement", label: "代持协议", tag: "NomineeAgreement", type: "radio", options: ["适用", "不适用"] }
-        ]
-    },
-
-    // -------------------- 11. 过桥贷款 --------------------
-    {
-        id: "section_bridge_loan",
-        header: { label: "11. 过桥贷款", tag: "Section_BridgeLoan" },
-        fields: [
-            { id: "hasBridgeLoan", label: "是否签署过桥贷款协议", tag: "HasBridgeLoan", type: "radio", options: ["是", "否"],
-              subFields: [
-                  { id: "loanDocName", label: "意向书/贷款协议名称", tag: "LoanDocName", type: "text" },
-                  { id: "loanDate", label: "签署日期", tag: "LoanDate", type: "date" },
-                  { id: "loanAmount", label: "贷款金额 (万元)", tag: "LoanAmount", type: "number" },
-                  { id: "loanTerm", label: "贷款期限 (月)", tag: "LoanTerm", type: "number" },
-                  { id: "loanInterest", label: "年化利率 (%)", tag: "LoanInterest", type: "number", value: "0" },
-                  { id: "overduePenalty", label: "逾期滞纳金比例 (每日千分之)", tag: "OverduePenalty", type: "number", value: "2" },
-                  { id: "loanRepayType", label: "偿还方式", tag: "LoanRepayType", type: "select", options: ["债转股 (转换本金)", "现金偿还"] },
-                  // 加速还款事件
-                  { id: "event_breach", label: "事件1: 违反本协议义务/承诺", tag: "Event_BreachAgreement", type: "radio", options: ["适用", "不适用"] },
-                  { id: "event_ts_breach", label: "事件2: 违反投资意向书(TS)", tag: "Event_BreachTS", type: "radio", options: ["适用", "不适用"] },
-                  { id: "event_insolvency", label: "事件3: 无力偿还到期债务/破产", tag: "Event_Insolvency", type: "radio", options: ["适用", "不适用"] }
-              ]
-            }
-        ]
-    },
-
-    // -------------------- 12. 声明保证与赔偿限制 --------------------
-    {
-        id: "section_reps",
-        header: { label: "12. 声明保证与赔偿限制", tag: "Section_RepsWarranties" },
-        fields: [
-            { id: "repsSubject", label: "声明保证主体", tag: "RepsSubject", type: "select", options: ["公司", "创始股东", "公司及创始股东连带"] },
-            
-            // --- 核心声明条款 ---
-            { id: "rep_existence", label: "1. 公司合法设立且有效存续", tag: "Rep_ValidExistence", type: "radio", options: ["确认", "有例外"] },
-            { id: "rep_no_debt", label: "2. 无未披露的隐性债务/担保", tag: "Rep_NoUndisclosedDebt", type: "radio", options: ["确认", "有例外"] },
-            { id: "rep_subsidiaries", label: "3. 已完整披露子公司/分公司结构", tag: "Rep_DisclosureSubsidiaries", type: "radio", options: ["确认", "有例外"] },
-            { id: "rep_tax", label: "4. 已按时足额申报/缴纳税款", tag: "Rep_TaxCompliance", type: "radio", options: ["确认", "有例外"] },
-            { id: "rep_litigation", label: "5. 无重大未决诉讼或仲裁", tag: "Rep_NoLitigation", type: "radio", options: ["确认", "有例外"] },
-
-            // --- 赔偿限制 ---
-            { id: "indemnity_de_minimis", label: "起赔额/免赔额 (万元)", tag: "IndemnityDeMinimis", type: "number", value: "50" },
-            { id: "indemnity_cap_amount", label: "赔偿上限金额 (万元)", tag: "IndemnityCapAmount", type: "number", value: "50" },
-            { id: "indemnity_cap_ratio", label: "赔偿上限比例 (投资款的%)", tag: "IndemnityCapRatio", type: "number", value: "100" },
-            { id: "indemnity_time_limit", label: "索赔时效 (交割日后x年)", tag: "IndemnityTimeLimit", type: "number", value: "4" }
-        ]
-    },
-
-    // -------------------- 13. 交割先决条件 --------------------
-    {
-        id: "section_cps",
-        header: { label: "13. 交割先决条件", tag: "Section_CPs" },
-        fields: [
-            // 1. 声明与保证 - 使用插入段落模式（保留原格式）
-            { 
-                id: "cp_warranties", 
-                label: "1. 声明与保证真实准确完整", 
-                tag: "CP_Warranties", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // 2. 签署交易文件 - 使用插入段落模式
-            { 
-                id: "cp_docs", 
-                label: "2. 签署交易文件(股东协议+新章程)", 
-                tag: "CP_SignDocs", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true,  // 标记为插入段落模式
-                subFields: [
-                    { id: "cp_articles_date", label: "公司章程签订日期", tag: "CP_ArticlesDate", type: "date" },
-                    { id: "cp_sha_date", label: "股东协议签订日期", tag: "CP_SHADate", type: "date" }
-                ]
-            },
-            
-            // 3. 股东会批准 - 使用插入段落模式
-            { 
-                id: "cp_approval", 
-                label: "3. 股东会批准本次交易", 
-                tag: "CP_Approval", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true,
-                subFields: [
-                    { id: "cp_board_size", label: "董事会总人数", tag: "CP_BoardSize", type: "number", placeholder: "如：5" },
-                    { id: "cp_founder_directors", label: "创始股东委派董事数", tag: "CP_FounderDirectors", type: "number", placeholder: "如：2" }
-                ]
-            },
-            
-            // 4. 工商变更登记 - 插入段落模式
-            { 
-                id: "cp_aic", 
-                label: "4. 完成工商变更登记", 
-                tag: "CP_AIC", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // 5. 关键人员全职加入 - 插入段落模式
-            { 
-                id: "cp_key_personnel", 
-                label: "5. 关键人员全职加入", 
-                tag: "CP_KeyPersonnel", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true,
-                subFields: [
-                    { id: "cp_labor_term", label: "劳动合同最低期限(年)", tag: "CP_LaborTerm", type: "number", placeholder: "如：4", formatFn: "chineseNumber" }
-                ]
-            },
-            
-            // 6. 无重大不利变化 - 插入段落模式
-            { 
-                id: "cp_no_mac", 
-                label: "6. 无重大不利变化(MAC)", 
-                tag: "CP_NoMAC", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // 7. 汇款通知 - 插入段落模式
-            { 
-                id: "cp_remittance", 
-                label: "7. 发出汇款通知", 
-                tag: "CP_Remittance", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // 8. 交割条件满足通知 - 插入段落模式
-            { 
-                id: "cp_closing_notice", 
-                label: "8. 交割条件满足通知", 
-                tag: "CP_ClosingNotice", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // 9. 投资委员会批准 - 插入段落模式
-            { 
-                id: "cp_ic_approval", 
-                label: "9. 投资委员会批准", 
-                tag: "CP_ICApproval", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // 10. 尽职调查完成 - 插入段落模式
-            { 
-                id: "cp_dd", 
-                label: "10. 尽职调查完成", 
-                tag: "CP_DD", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // 11. 创始人持股公司承诺函 - 插入段落模式
-            { 
-                id: "cp_founder_holdco", 
-                label: "11. 创始人持股公司承诺函", 
-                tag: "CP_FounderHoldco", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // 付款天数
-            { id: "cp_payment_days", label: "先决条件满足后付款天数", tag: "CP_PaymentDays", type: "number", value: "10" }
-        ]
-    },
-
-    // -------------------- 14. 各方承诺 --------------------
-    {
-        id: "section_covenants",
-        header: { label: "14. 各方承诺", tag: "Section_Promises" },
-        fields: [
-            // --- 期限类字段 ---
-            { type: "divider", label: "各项承诺期限" },
-            { id: "promise_labor_contract", label: "签署劳动合同期限(月)", tag: "Promise_LaborContractMonths", type: "number", placeholder: "如：1", formatFn: "chineseNumber" },
-            { id: "promise_ip_transfer", label: "无形资产转让期限(月)", tag: "Promise_IPTransferMonths", type: "number", placeholder: "如：1", formatFn: "chineseNumber" },
-            { id: "promise_trademark_apply", label: "商标申请期限(月)", tag: "Promise_TrademarkApplyMonths", type: "number", placeholder: "如：3", formatFn: "chineseNumber" },
-            { id: "promise_trademark_reg", label: "商标注册期限(月)", tag: "Promise_TrademarkRegMonths", type: "number", placeholder: "如：6", formatFn: "chineseNumber" },
-            { id: "promise_other_ip", label: "其他无形资产申请期限(月)", tag: "Promise_OtherIPMonths", type: "number", placeholder: "如：3", formatFn: "chineseNumber" },
-            { id: "promise_license_delivery", label: "营业执照交付期限(工作日)", tag: "Promise_LicenseDeliveryDays", type: "number", placeholder: "如：30", formatFn: "chineseNumber" },
-            { id: "promise_aic_change", label: "工商变更期限(工作日)", tag: "Promise_AICChangeDays", type: "number", placeholder: "如：30", formatFn: "chineseNumber" },
-            
-            // --- 商标名称 ---
-            { type: "divider", label: "商标信息" },
-            { id: "promise_trademark_name1", label: "商标名称1", tag: "Promise_TrademarkName1", type: "text", placeholder: "如：公司品牌名" },
-            { id: "promise_trademark_name2", label: "商标名称2", tag: "Promise_TrademarkName2", type: "text", placeholder: "如：产品名" },
-            { id: "promise_trademark_name3", label: "商标名称3", tag: "Promise_TrademarkName3", type: "text", placeholder: "如：Logo名" },
-            
-            // --- 最惠国条款 ---
-            { type: "divider", label: "最惠国条款" },
-            { id: "promise_mfn_timing", label: "最惠国条款适用时间", tag: "Promise_MFNTiming", type: "select", options: ["完成前及完成后", "仅完成后"] }
-        ]
-    },
-
-    // -------------------- 15. 重大事项否决权 --------------------
-    {
-        id: "section_veto",
-        header: { label: "15. 重大事项否决权", tag: "Section_Veto" },
-        fields: [
-            { id: "veto_subject", label: "拥有一票否决权的主体", tag: "VetoSubject", type: "text", value: "本轮投资方" },
-            
-            // --- 否决事项列表 ---
-            { id: "veto_cap_inc", label: "1. 增加注册资本/发行新股", tag: "Veto_IncreaseCapital", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_cap_dec", label: "2. 减少注册资本/回购股权", tag: "Veto_DecreaseCapital", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_structure", label: "3. 修改融资方案/股权结构", tag: "Veto_Structure", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_rights", label: "4. 修改股东权利/优先权", tag: "Veto_AmendRights", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_articles", label: "5. 修改公司章程", tag: "Veto_AmendArticles", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_board", label: "6. 变更董事会人数/产生方式", tag: "Veto_ChangeBoard", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_senior", label: "7. 聘用/解聘高管(CEO/CFO等)", tag: "Veto_SeniorMgmt", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_assets", label: "8. 重大资产出售/收购/许可", tag: "Veto_DisposeAssets", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_guarantee", label: "9. 对外担保/借款", tag: "Veto_Guarantees", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_related", label: "10. 关联交易", tag: "Veto_RelatedTx", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_dividend", label: "11. 利润分配/分红", tag: "Veto_Dividends", type: "radio", options: ["适用", "不适用"] },
-            { id: "veto_ipo_ma", label: "12. 上市(IPO)或并购(M&A)方案", tag: "Veto_IPO_MA", type: "radio", options: ["适用", "不适用"] }
-        ]
-    }
-];
+window.loadPEVCTemplate = loadPEVCTemplate;
 
 /**
- * 加载表单配置（优先从 LocalStorage，否则从 JSON 文件）
+ * 加载表单配置（优先从 LocalStorage，否则使用默认空配置）
  */
 async function loadFormConfig() {
     console.log("[FormConfig] 开始加载配置...");
@@ -395,28 +69,20 @@ async function loadFormConfig() {
             contractConfig = JSON.parse(savedConfig);
             console.log("[FormConfig] 从 LocalStorage 加载配置，共", contractConfig.length, "个 sections");
             return true;
+        } else if (savedConfig && (savedVersion !== CURRENT_CONFIG_VERSION)) {
+            console.log("[FormConfig] 配置版本不匹配 (" + savedVersion + " vs " + CURRENT_CONFIG_VERSION + ")，执行强制清理");
+            localStorage.removeItem(FORM_CONFIG_KEY);
+            localStorage.removeItem(FORM_CONFIG_VERSION_KEY);
         }
     } catch (e) {
         console.warn("[FormConfig] LocalStorage 读取失败:", e.message);
     }
     
-    // 2. 默认清空配置（不再自动加载 DEFAULT_CONTRACT_CONFIG 或 JSON 文件）
-    contractConfig = [
-        {
-            id: "section_files",
-            header: { label: "1. 所需文件", tag: "Section_Files" },
-            fields: [
-                { type: "html_placeholder", targetId: "cloud-sync-section" }
-            ]
-        }
-    ];
+    // 2. 默认清空配置
+    contractConfig = JSON.parse(JSON.stringify(DEFAULT_CONTRACT_CONFIG));
     console.log("[FormConfig] 配置已重置为空（仅保留基础结构）");
     return true;
 }
-
-/**
- * 保存表单配置到 LocalStorage
- */
 function saveFormConfig() {
     try {
         localStorage.setItem(FORM_CONFIG_KEY, JSON.stringify(contractConfig));

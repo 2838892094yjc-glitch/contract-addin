@@ -8,7 +8,7 @@
 
   <!-- 插件的基本信息 -->
   <Id>5f7a2b9e-1234-4567-89ab-cdef01234567</Id>
-  <Version>1.0.0.1</Version>
+  <Version>1.0.0.2</Version>
   <ProviderName>ContractAssistant</ProviderName>
   <DefaultLocale>zh-CN</DefaultLocale>
   <DisplayName DefaultValue="PEVC合同助手" />
