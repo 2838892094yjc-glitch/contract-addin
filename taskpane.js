@@ -17,488 +17,41 @@ const CURRENT_CONFIG_VERSION = "v20260108e"; // 配置版本号，更新时修�
 // 表单配置数组（动态加载）
 let contractConfig = [];
 
-// 默认配置（仅作为备用，正常从 form-config.json 加载）
+// 默认配置（清空硬编码，改为按需从 templates 加载）
 const DEFAULT_CONTRACT_CONFIG = [
-    // -------------------- 1. 所需文件 --------------------
     {
         id: "section_files",
         header: { label: "1. 所需文件", tag: "Section_Files" },
         fields: [
-            // 特殊字段：此 Section 的内容将由 buildForm 函数动态注入 Cloud Sync UI
             { type: "html_placeholder", targetId: "cloud-sync-section" }
         ]
-    },
+    }
+];
 
-    // -------------------- 2. 公司基本信息 --------------------
-    {
-        id: "section_company_info",
-        header: { label: "2. 公司基本信息", tag: "Section_CompanyInfo" },
-        fields: [
-            // --- 0. 签订时间与地点 ---
-            { id: "signingDate", label: "签订时间", tag: "SigningDate", type: "date", formatFn: "dateUnderline", placeholder: "选择日期", hasParagraphToggle: true },
-            { id: "signingPlace", label: "签订地点", tag: "SigningPlace", type: "text", placeholder: "如：北京" },
-            
-            // --- 1. 律师代表 ---
-            { id: "lawyerRep", label: "律师代表", tag: "LawyerRepresenting", type: "radio", options: ["公司", "投资方", "公司/投资方"] },
-            
-            // --- 2. 基础信息 ---
-            { id: "projectShortName", label: "项目简称", tag: "ProjectShortName", type: "text" },
-            { id: "companyName", label: "目标公司名称", tag: "CompanyName", type: "text" },
-            { id: "companyBusiness", label: "主营业务", tag: "CompanyBusiness", type: "text" },
-            { id: "companyCapital", label: "注册资本", tag: "CompanyCapital", type: "text" },
-            { id: "companyCity", label: "所在城市", tag: "CompanyCity", type: "text" },
-            { id: "regAddress", label: "注册地址", tag: "RegAddress", type: "text" },
-            { id: "legalRep", label: "法定代表人姓名", tag: "LegalRepName", type: "text" },
-            { id: "legalRepTitle", label: "法定代表人职务", tag: "LegalRepTitle", type: "select", options: ["董事长", "执行董事", "总经理"] },
-            { id: "legalRepNationality", label: "法定代表人国籍", tag: "LegalRepNationality", type: "select", options: ["中国", "美国", "新加坡", "其他"] },
-            { id: "businessDesc", label: "主营业务描述", tag: "BusinessDesc", type: "text" },
-            { id: "currentDirectors", label: "现任董事姓名", tag: "CurrentDirectors", type: "text", placeholder: "多个请用逗号隔开" },
-            { 
-                id: "shareholderCount", 
-                label: "股东总数", 
-                tag: "ShareholderCount", 
-                type: "number", 
-                value: "1",
-                autoCount: true, // 特殊标记：自动统计已启用的股东数量
-                placeholder: "系统自动统计，也可手动修改"
-            },
-
-            // --- 3. 股东 1 (创始人/大股东) - 必填 ---
-            { type: "divider", label: "股东 1 (创始人/大股东)" },
-            { id: "sh1_name", label: "姓名/名称", tag: "SH1_Name", type: "text" },
-            { id: "sh1_type", label: "类型", tag: "SH1_Type", type: "select", options: ["个人", "有限公司", "合伙企业"] },
-            { id: "sh1_id", label: "证件号码", tag: "SH1_ID", type: "text" },
-            { id: "sh1_nation", label: "国籍/所在地", tag: "SH1_Nation", type: "text" },
-            { id: "sh1_address", label: "注册地址", tag: "SH1_Address", type: "text" },
-            { id: "sh1_reg_cap", label: "认缴注册资本(万元)", tag: "SH1_RegCapital", type: "number" },
-            { id: "sh1_paid_cap", label: "实缴注册资本(万元)", tag: "SH1_PaidCapital", type: "number" },
-            { id: "sh1_ratio", label: "持股比例/出资比例(%)", tag: "SH1_Ratio", type: "number" },
-            { id: "sh1_currency", label: "币种", tag: "SH1_Currency", type: "select", options: ["人民币", "美元"] },
-            { type: "divider", label: "增资后" },
-            { id: "sh1_post_reg_cap", label: "增资后注册资本(万元)", tag: "SH1_PostRegCapital", type: "number" },
-            { id: "sh1_post_ratio", label: "增资后持股比例(%)", tag: "SH1_PostRatio", type: "number" }
-        ]
-    },
-
-    // -------------------- 其他现有股东/历轮投资人 (可选段落) - 归属于 Section 2 --------------------
-    {
-        id: "section_existing_shareholders",
-        type: "existing_shareholders",
-        header: { label: "2.1 现有股东/历轮投资人", tag: "Section_ExistingShareholders" },
-        shareholders: [
-            // 创始股东
-            { id: "sh2", label: "创始股东 2", tag: "SH2" },
-            // 种子轮
-            { id: "sh3", label: "种子轮投资人 1", tag: "SH3" },
-            { id: "sh4", label: "种子轮投资人 2", tag: "SH4" },
-            // 天使轮
-            { id: "sh5", label: "天使轮投资人 1", tag: "SH5" },
-            { id: "sh6", label: "天使轮投资人 2", tag: "SH6" },
-            // Pre-A轮
-            { id: "sh7", label: "Pre-A轮投资人 1", tag: "SH7" },
-            { id: "sh8", label: "Pre-A轮投资人 2", tag: "SH8" },
-            // A轮
-            { id: "sh9", label: "A轮投资人 1", tag: "SH9" },
-            { id: "sh10", label: "A轮投资人 2", tag: "SH10" },
-            // B轮
-            { id: "sh11", label: "B轮投资人 1", tag: "SH11" },
-            { id: "sh12", label: "B轮投资人 2", tag: "SH12" }
-        ],
-        shareholderFields: [
-            { id: "_name", label: "姓名/名称", tag: "_Name", type: "text" },
-            { id: "_short", label: "简称", tag: "_Short", type: "text" },
-            { id: "_round", label: "融资轮次", tag: "_Round", type: "select", options: ["创始", "种子轮", "天使轮", "Pre-A轮", "A轮", "B轮", "C轮", "其他"] },
-            { id: "_type", label: "类型", tag: "_Type", type: "select", options: ["个人", "有限公司", "有限合伙"], triggerConditional: true },
-            { id: "_id", label: "证件号码", tag: "_ID", type: "text" },
-            { id: "_nation", label: "国籍/所在地", tag: "_Nation", type: "text" },
-            { id: "_address", label: "注册地址", tag: "_Address", type: "text" },
-            { 
-                id: "_legalRep", 
-                label: "法定代表人", 
-                tag: "_LegalRep", 
-                paraTag: "_LegalRepPara",
-                type: "text", 
-                showWhen: ["有限公司", "有限合伙"], 
-                hasParagraphToggle: true 
-            },
-            { id: "_investAmount", label: "投资额(万元)", tag: "_InvestAmount", type: "number", showWhenRound: ["种子轮", "天使轮", "Pre-A轮", "A轮", "B轮", "C轮", "其他"] },
-            { id: "_regCapital", label: "认缴注册资本(万元)", tag: "_RegCapital", type: "number" },
-            { id: "_paidCapital", label: "实缴注册资本(万元)", tag: "_PaidCapital", type: "number" },
-            { id: "_ratio", label: "持股比例/出资比例(%)", tag: "_Ratio", type: "number" },
-            { id: "_currency", label: "币种", tag: "_Currency", type: "select", options: ["人民币", "美元"] },
-            { id: "_postRegCapital", label: "增资后注册资本(万元)", tag: "_PostRegCapital", type: "number" },
-            { id: "_postRatio", label: "增资后持股比例(%)", tag: "_PostRatio", type: "number" }
-        ]
-    },
-
-    // -------------------- 3. 本轮融资信息 --------------------
-    {
-        id: "section_financing",
-        header: { label: "3. 本轮融资信息", tag: "Section_Financing" },
-        fields: [
-            // --- A. 增资前股权调整 ---
-            {
-                id: "needEquityAdjust",
-                label: "增资前是否需要调整股权",
-                tag: "NeedEquityAdjust",
-                type: "radio", 
-                options: ["否", "是"],
-                subFields: [
-                    { type: "divider", label: "股权调整事项 1" },
-                    { id: "adj1_type", label: "调整方式", tag: "Adj1_Type", type: "select", options: ["转出", "增资", "减资"] },
-                    { id: "adj1_transferor", label: "出让方/增资方", tag: "Adj1_Transferor", type: "text" },
-                    { id: "adj1_transferee", label: "受让方", tag: "Adj1_Transferee", type: "text" },
-                    { id: "adj1_price", label: "价格(万元)", tag: "Adj1_Price", type: "number" },
-                    
-                    { type: "divider", label: "股权调整事项 2" },
-                    { id: "adj2_type", label: "调整方式", tag: "Adj2_Type", type: "select", options: ["转出", "增资", "减资"] },
-                    { id: "adj2_transferor", label: "出让方/增资方", tag: "Adj2_Transferor", type: "text" },
-                    { id: "adj2_transferee", label: "受让方", tag: "Adj2_Transferee", type: "text" },
-                    { id: "adj2_price", label: "价格(万元)", tag: "Adj2_Price", type: "number" }
-                ]
-            },
-
-            // --- C. 本次增资信息 ---
-            { type: "divider", label: "本次增资" },
-            { id: "investmentAmount", label: "投资款总额(万元)", tag: "InvestmentAmount", type: "number" },
-            { id: "capitalIncrease", label: "计入注册资本(万元)", tag: "CapitalIncrease", type: "number" },
-            { id: "capitalReserve", label: "计入资本公积金", tag: "CapitalReserve", type: "text", value: "剩余部分", placeholder: "填'剩余部分'或具体数额" },
-            { id: "postCapitalTotal", label: "增资后总注册资本(万元)", tag: "PostCapitalTotal", type: "number" },
-            { id: "newEquityRatio", label: "本次取得股权比例(%)", tag: "NewEquityRatio", type: "number" },
-            
-            // --- D. 基础融资条款 ---
-            { type: "divider", label: "基础条款" },
-            { id: "paymentDeadline", label: "最晚缴纳时间", tag: "PaymentDeadline", type: "date" }
-        ]
-    },
-
-    // -------------------- 本轮投资人 (Section 3 子项) --------------------
-    {
-        id: "section_current_investors",
-        type: "current_investors",
-        header: { label: "3.1 本轮投资人", tag: "Section_CurrentInvestors" },
-        investors: [
-            { id: "lead", label: "领投方", tag: "Inv_Lead" },
-            { id: "follow1", label: "跟投方 1", tag: "Inv_Follow1" },
-            { id: "follow2", label: "跟投方 2", tag: "Inv_Follow2" },
-            { id: "follow3", label: "跟投方 3", tag: "Inv_Follow3" }
-        ],
-        investorFields: [
-            { id: "_name", label: "名称/姓名", tag: "_Name", type: "text" },
-            { id: "_short", label: "简称", tag: "_Short", type: "text" },
-            { id: "_type", label: "类型", tag: "_Type", type: "select", options: ["有限公司", "有限合伙", "个人"], triggerConditional: true },
-            { id: "_nation", label: "注册地/国籍", tag: "_Nation", type: "text" },
-            { id: "_address", label: "注册地址", tag: "_Address", type: "text" },
-            { id: "_id", label: "证件号码", tag: "_ID", type: "text" },
-            { id: "_legalRep", label: "法定代表人", tag: "_LegalRep", paraTag: "_LegalRepPara", type: "text", showWhen: ["有限公司", "有限合伙"], hasParagraphToggle: true },
-            { id: "_amount", label: "投资额(万元)", tag: "_Amount", type: "number" },
-            { id: "_currency", label: "币种", tag: "_Currency", type: "select", options: ["人民币", "美元"] },
-            { id: "_equityRatio", label: "本次取得股权比例(%)", tag: "_EquityRatio", type: "number" },
-            { id: "_regCapital", label: "本次对应注册资本(万元)", tag: "_RegCapital", type: "number" },
-            { id: "_postRegCapital", label: "增资后注册资本(万元)", tag: "_PostRegCapital", type: "number" },
-            { id: "_postRatio", label: "增资后持股比例(%)", tag: "_PostRatio", type: "number" }
-        ]
-    },
-
-    // -------------------- 4. 定义及其他签约方 --------------------
-    {
-        id: "section_definitions",
-        header: { label: "4. 定义及其他签约方", tag: "Section_Definitions" },
-        fields: [
-            { id: "otherParties", label: "其他签约方信息", tag: "OtherParties", type: "text", placeholder: "如有其他方请在此备注" }
-        ]
-    },
-
-    // -------------------- 5. 创始人、新董事会、核心员工 --------------------
-    {
-        id: "section_board",
-        header: { label: "5. 创始人、新董事会、核心员工", tag: "Section_Board" },
-        fields: [
-            { id: "newBoardSize", label: "新董事会由几名董事组成", tag: "NewBoardSize", type: "number" },
-            { id: "investorBoardSeats", label: "本轮投资方有权任命董事人数", tag: "InvestorBoardSeats", type: "number" },
-            { id: "founderBoardSeats", label: "创始人有权任命董事人数", tag: "FounderBoardSeats", type: "number" },
-            { id: "founderHasOutsideEquity", label: "创始人是否持有集团外公司股权", tag: "FounderHasOutsideEquity", type: "radio", options: ["是", "否"] },
-            // "nonCompetePromise" 移至 Section 10
-            { id: "coreStaffList", label: "核心员工名单 (姓名/职务)", tag: "CoreStaffList", type: "text" }
-        ]
-    },
-
-    // -------------------- 6. 特殊赔偿、交易费用、争议解决 --------------------
-    {
-        id: "section_indemnity",
-        header: { label: "6. 特殊赔偿及其他", tag: "Section_Indemnity" },
-        fields: [
-            // --- 特殊赔偿 (全部使用插入段落模式) ---
-            { id: "indemnity_social", label: "1. 社保/公积金未足额缴纳", tag: "Indemnity_SocialSecurity", type: "radio", options: ["适用", "不适用"], hasParagraphToggle: true },
-            { id: "indemnity_tax", label: "2. 未足额缴纳税款/滞纳金", tag: "Indemnity_Tax", type: "radio", options: ["适用", "不适用"], hasParagraphToggle: true },
-            { id: "indemnity_penalty", label: "3. 行政处罚或责任", tag: "Indemnity_Penalty", type: "radio", options: ["适用", "不适用"], hasParagraphToggle: true },
-            { id: "indemnity_license", label: "4. 业务牌照/资质缺失", tag: "Indemnity_License", type: "radio", options: ["适用", "不适用"], hasParagraphToggle: true },
-            { id: "indemnity_equity", label: "5. 股权权属纠纷", tag: "Indemnity_Equity", type: "radio", options: ["适用", "不适用"], hasParagraphToggle: true },
-            { id: "indemnity_ip", label: "6. 知识产权侵权/权属不完善", tag: "Indemnity_IP", type: "radio", options: ["适用", "不适用"], hasParagraphToggle: true },
-            { id: "indemnity_litigation", label: "7. 未决诉讼/仲裁", tag: "Indemnity_Litigation", type: "radio", options: ["适用", "不适用"], hasParagraphToggle: true },
-            { id: "indemnity_noncompete", label: "8. 核心员工违反竞业/保密义务", tag: "Indemnity_NonCompete", type: "radio", options: ["适用", "不适用"], hasParagraphToggle: true },
-            
-            // --- 责任限制 ---
-            { type: "divider", label: "责任限制" },
-            { id: "liability_threshold", label: "免责门槛金额(万元)", tag: "Liability_Threshold", type: "number", placeholder: "如：50", formatFn: "chineseNumber" },
-            { id: "warranty_valid_years", label: "声明保证有效期(年)", tag: "Warranty_ValidYears", type: "number", placeholder: "如：4", formatFn: "chineseNumber" },
-            
-            // --- 交易费用 ---
-            { type: "divider", label: "交易费用" },
-            { 
-                id: "fee_success", 
-                label: "交易成功 - 公司承担费用", 
-                tag: "Fee_Success", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true,
-                subFields: [
-                    { id: "fee_cap", label: "费用上限金额(万元)", tag: "FeeCap", type: "number", placeholder: "如：50" }
-                ]
-            },
-            { 
-                id: "fee_fail", 
-                label: "交易终止 - 各方自担费用", 
-                tag: "Fee_Fail", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // --- 争议解决 ---
-            { id: "arbitrationOrg", label: "仲裁机构", tag: "ArbitrationOrg", type: "text", value: "中国国际经济贸易仲裁委员会" },
-            { id: "arbitrationPlace", label: "仲裁地", tag: "ArbitrationPlace", type: "text", value: "北京" },
-            { id: "hasTS", label: "是否签署投资意向书", tag: "HasTS", type: "radio", options: ["是", "否"] },
-            { id: "tsDate", label: "意向书签署日期", tag: "TSDate", type: "date" }
-        ]
-    },
-
-    // -------------------- 7. 股权变动限制 --------------------
-    {
-        id: "section_preemptive",
-        header: { label: "7. 股权变动限制", tag: "Section_Preemptive" },
-        fields: [
-            // --- 现有股东转让限制 ---
-            { id: "transfer_restricted_party", label: "被限制转让的主体", tag: "TransferRestrictedParty", type: "text", value: "创始股东", placeholder: "例如：创始股东、现有股东" },
-            { id: "transfer_consent", label: "转让股权需经谁同意", tag: "TransferConsentSubject", type: "text", value: "本轮投资方" },
-            { id: "transfer_consent_type", label: "同意形式", tag: "TransferConsentType", type: "text", value: "书面同意" },
-            
-            // --- 投资人转股权 (新增) ---
-            { id: "investorTransferRight", label: "投资人是否可自由转股", tag: "InvestorTransferRight", type: "radio", options: ["是", "否"], value: "是" },
-            
-            // --- 优先认购权 ---
-            { id: "hasPreemptiveRight", label: "新股优先认购权", tag: "HasPreemptiveRight", type: "radio", options: ["是", "否"] },
-            { id: "preemptiveHolder", label: "优先认购权人", tag: "PreemptiveHolder", type: "text", value: "本轮投资方" },
-            { id: "hasSuperPreemptive", label: "是否享有超额认购权", tag: "HasSuperPreemptive", type: "radio", options: ["是", "否"] },
-
-            // --- 优先购买权 & 共售权 ---
-            { id: "hasRofr", label: "老股优先购买权", tag: "HasRofr", type: "radio", options: ["是", "否"] },
-            { id: "hasCoSale", label: "共同出售权", tag: "HasCoSale", type: "radio", options: ["是", "否"] },
-            { id: "rofrHolder", label: "权利享有方", tag: "RofrHolder", type: "text", value: "本轮投资方" },
-            
-            // --- 领售权 ---
-            { id: "hasDragAlong", label: "领售权 (拖售权)", tag: "HasDragAlong", type: "radio", options: ["是", "否"] },
-            { id: "dragAlongTrigger", label: "领售触发条件", tag: "DragAlongTrigger", type: "text", placeholder: "例如：交割后 5 年未上市" },
-            { id: "dragAlongValuation", label: "领售最低估值 (亿元)", tag: "DragAlongValuation", type: "number" }
-        ]
-    },
-
-    // -------------------- 8. 核心经济条款 --------------------
-    {
-        id: "section_economics",
-        header: { label: "8. 核心经济条款", tag: "Section_Economics" },
-        fields: [
-            // --- 反稀释 ---
-            { 
-                id: "antiDilution", 
-                label: "反稀释权条款", 
-                tag: "HasAntiDilution", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            { id: "antiDilutionHolder", label: "反稀释权人", tag: "AntiDilutionHolder", type: "text", value: "本轮投资方" },
-            { id: "antiDilutionOrigPrice", label: "本轮原始认购价格(元/注册资本)", tag: "AntiDilutionOrigPrice", type: "number", placeholder: "例如：10" },
-            { 
-                id: "antiDilutionMethod", 
-                label: "价格调整方式", 
-                tag: "AntiDilutionMethod", 
-                type: "select", 
-                options: ["广义加权平均", "完全棘轮", "狭义加权平均"]
-            },
-            { 
-                id: "antiDilutionFormula", 
-                label: "计算公式", 
-                tag: "AntiDilutionFormula", 
-                type: "select", 
-                options: ["广义加权平均", "完全棘轮", "狭义加权平均"],
-                valueMap: {
-                    "广义加权平均": `按照广义加权平均的方式调整其原始认购价格，使得调整后的认购价格等于按如下公式确定的价格：
-
-P2 = P1 × (A + B) / (A + C)
-
-为上述公式之目的，各字母的含义如下：
-
-P2为调整后的认购价格；
-
-P1为原始认购价格；
-
-A为公司新融资之前的注册资本总额（在完全稀释的基础上）；
-
-B为假设公司新融资采用P1作为新认购价格的情况下，所增加或发行的注册资本数额；
-
-C为公司新融资中实际增加或发行的注册资本数额。`,
-                    "完全棘轮": `按照完全棘轮的方式调整其原始认购价格，使得调整后的认购价格等于触发反稀释的新融资中新增股东的新认购价格：
-
-P2 = 新认购价格
-
-即反稀释权人的原始认购价格将被调整至与本次新融资中新增股东的认购价格相同。`,
-                    "狭义加权平均": `按照狭义加权平均的方式调整其原始认购价格，使得调整后的认购价格等于按如下公式确定的价格：
-
-P2 = P1 × (A + B) / (A + C)
-
-为上述公式之目的，各字母的含义如下：
-
-P2为调整后的认购价格；
-
-P1为原始认购价格；
-
-A为反稀释权人在新融资之前持有的公司注册资本数额；
-
-B为假设公司新融资采用P1作为新认购价格的情况下，反稀释权人按其持股比例应认购的注册资本数额；
-
-C为按反稀释权人持股比例计算的公司新融资中实际增加或发行的注册资本数额。`
-                }
-            },
-            { id: "antiDilutionCompDays", label: "补偿期限(天)", tag: "AntiDilutionCompDays", type: "number", value: "30", formatFn: "chineseNumber" },
-            { id: "preemptiveClauseRef", label: "优先认购权条款编号", tag: "PreemptiveClauseRef", type: "text", placeholder: "例如：第5.1条" },
-
-            // --- 优先清算权 ---
-            { id: "liquidationPref", label: "清算优先权", tag: "HasLiquidationPref", type: "radio", options: ["是", "否"] },
-            { id: "liqRanking", label: "是否优于普通股", tag: "LiqRanking", type: "radio", options: ["是", "否"] },
-            { id: "liqMultiple", label: "优先清算回报倍数 (X倍本金)", tag: "LiqMultiple", type: "number", value: "1" },
-            { id: "liqInterest", label: "清算年化利率 (%)", tag: "LiqInterest", type: "number", value: "0" },
-            { id: "participationType", label: "剩余财产分配方式", tag: "ParticipationType", type: "select", options: ["无参与权(Non-participating)", "完全参与(Full participating)", "附上限参与(Capped)"] }
-        ]
-    },
-
-    // -------------------- 8.1 回购权 (独立 Section，可整体插入段落) --------------------
-    {
-        id: "section_redemption",
-        header: { label: "8.1 回购权", tag: "Section_Redemption" },
-        hasSectionToggle: true, // 标记整个 Section 可以作为"插入段落"
-        fields: [
-            // --- 回购权整体开关 ---
-            { 
-                id: "hasRedemptionRight", 
-                label: "回购权条款", 
-                tag: "Section_Redemption", // 使用 Section 的 tag，控制整个回购权段落
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true // 选择"适用"显示段落，"不适用"隐藏段落
-            },
-            
-            // --- 回购触发事件 (每个都是插入段落) ---
-            { type: "divider", label: "回购触发事件" },
-            { 
-                id: "redemptionEvent_IPO", 
-                label: "事件1: 未上市/退出失败", 
-                tag: "RedemptionEvent_IPO", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true,
-                subFields: [
-                    { id: "redemptionTriggerYears", label: "触发年限(年)", tag: "RedemptionTriggerYears", type: "number", value: "6", formatFn: "chineseNumber" }
-                ]
-            },
-            { 
-                id: "redemptionEvent_Breach", 
-                label: "事件2: 严重违反协议", 
-                tag: "RedemptionEvent_Breach", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            { 
-                id: "redemptionEvent_Law", 
-                label: "事件3: 严重违反法律法规", 
-                tag: "RedemptionEvent_Law", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            { 
-                id: "redemptionEvent_Policy", 
-                label: "事件4: 法律政策变化", 
-                tag: "RedemptionEvent_Policy", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            { 
-                id: "redemptionEvent_Founder", 
-                label: "事件5: 创始人/核心人员问题", 
-                tag: "RedemptionEvent_Founder", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            { 
-                id: "redemptionEvent_Control", 
-                label: "事件6: 实际控制人变更", 
-                tag: "RedemptionEvent_Control", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            { 
-                id: "redemptionEvent_Business", 
-                label: "事件7: 主营业务变更/经营异常", 
-                tag: "RedemptionEvent_Business", 
-                type: "radio", 
-                options: ["适用", "不适用"],
-                hasParagraphToggle: true
-            },
-            
-            // --- 回购主体 ---
-            { type: "divider", label: "回购主体" },
-            { id: "redemptionRightHolder", label: "回购权人", tag: "RedemptionRightHolder", type: "text", value: "本轮投资方与投资方" },
-            { id: "redemptionObligor", label: "回购义务人", tag: "RedemptionObligor", type: "text", value: "公司与创始股东" },
-            { id: "redemptionClauseRef", label: "回购价格条款编号", tag: "RedemptionClauseRef", type: "text", value: "第3.2条" },
-            
-            // --- 回购价格计算 ---
-            { type: "divider", label: "回购价格计算" },
-            { 
-                id: "redemptionPriceMode", 
-                label: "价格计算模式", 
-                tag: "RedemptionPriceMode", 
-                type: "select", 
-                options: ["单利(成本+回报)", "复利(成本+回报)", "固定倍数", "两者孰高(单利vs公允)"],
-                hasParagraphToggle: true,
-                valueMap: {
-                    "单利(成本+回报)": `拟回购股权的回购价格（"回购价格"）应当按照以下公式计算：
-
-回购价格 ＝ I × (1 + R × N) + A
-
-I 为回购权人为获得拟回购股权实际支付的成本总额；
-
-R 为回购利率，即【RedemptionInterestRate】%；
-
-N 是一个分数，其分子为交割日至回购义务人向回购权人足额支付全部回购价格之日（"回购日"）之间所经过的天数，分母为365；
-
-A 为回购日之前公司已宣布分配但尚未向该回购权人实际支付的拟回购股权对应的全部分红或股息。`,
-                    "复利(成本+回报)": `拟回购股权的回购价格（"回购价格"）应当按照以下公式计算：
-
-回购价格 ＝ I × (1 + R)^N + A
-
-I 为回购权人为获得拟回购股权实际支付的成本总额；
-
-R 为回购利率，即【RedemptionCompoundRate】%；
-
-N 为交割日至回购日之间所经过的年数（不满一年的部分按实际天数/365计算）；
-
-A 为回购日之前公司已宣布分配但尚未向该回购权人实际支付的拟回购股权对应的全部分红或股息。`,
-                    "固定倍数": `拟回购股权的回购价格（"回购价格"）应当按照以下公式计算：
+/**
+ * 加载 PEVC 模板
+ */
+async function loadPEVCTemplate() {
+    if (typeof PEVC_DEFAULT_TEMPLATE === 'undefined') {
+        showNotification("PEVC 模板尚未加载，请稍后再试", "error");
+        return;
+    }
+    
+    const confirmed = await showConfirmDialog("确定加载 PEVC 默认模板吗？这将覆盖当前的表单配置。", {
+        confirmText: "确定加载",
+        cancelText: "取消"
+    });
+    
+    if (!confirmed) return;
+    
+    contractConfig = JSON.parse(JSON.stringify(PEVC_DEFAULT_TEMPLATE));
+    console.log("[Template] Loaded PEVC template, fields:", contractConfig.length);
+    
+    saveFormConfig();
+    buildForm();
+    showNotification("PEVC 模板加载成功", "success");
+}
+window.loadPEVCTemplate = loadPEVCTemplate;                    "固定倍数": `拟回购股权的回购价格（"回购价格"）应当按照以下公式计算：
 
 回购价格 ＝ I × Y% + A
 
@@ -842,30 +395,22 @@ async function loadFormConfig() {
             contractConfig = JSON.parse(savedConfig);
             console.log("[FormConfig] 从 LocalStorage 加载配置，共", contractConfig.length, "个 sections");
             return true;
-        } else if (savedConfig && savedVersion !== CURRENT_CONFIG_VERSION) {
-            console.log("[FormConfig] 配置版本不匹配，将重新加载默认配置");
         }
     } catch (e) {
         console.warn("[FormConfig] LocalStorage 读取失败:", e.message);
     }
     
-    // 2. 尝试从 JSON 文件加载
-    try {
-        const response = await fetch('form-config.json?v=' + Date.now());
-        if (response.ok) {
-            contractConfig = await response.json();
-            console.log("[FormConfig] 从 form-config.json 加载配置，共", contractConfig.length, "个 sections");
-            // 保存到 LocalStorage
-            saveFormConfig();
-            return true;
+    // 2. 默认清空配置（不再自动加载 DEFAULT_CONTRACT_CONFIG 或 JSON 文件）
+    contractConfig = [
+        {
+            id: "section_files",
+            header: { label: "1. 所需文件", tag: "Section_Files" },
+            fields: [
+                { type: "html_placeholder", targetId: "cloud-sync-section" }
+            ]
         }
-    } catch (e) {
-        console.warn("[FormConfig] JSON 文件加载失败:", e.message);
-    }
-    
-    // 3. 使用默认配置
-    contractConfig = JSON.parse(JSON.stringify(DEFAULT_CONTRACT_CONFIG));
-    console.log("[FormConfig] 使用默认配置，共", contractConfig.length, "个 sections");
+    ];
+    console.log("[FormConfig] 配置已重置为空（仅保留基础结构）");
     return true;
 }
 
@@ -6417,11 +5962,10 @@ if (typeof Office !== 'undefined') {
         fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:Office.onReady',message:'pinyin-pro全局变量检测',data:pinyinCheck,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
         // #endregion
         
-        // 0. 【新增】先加载表单配置
+        // 0. 加载基础配置（如果是空文档，则只有“所需文件”）
         await loadFormConfig();
         
         // 1. 【双轨同步】优先从 LocalStorage 加载状态
-        // LocalStorage 是"真理源"，确保同浏览器下的文件状态一致
         const lsState = loadFormStateFromLocalStorage();
         if (lsState) {
             console.log("[Init] Using LocalStorage as primary state source");
@@ -6429,13 +5973,7 @@ if (typeof Office !== 'undefined') {
             if (lsState.enabledRounds) enabledRounds = { ...enabledRounds, ...lsState.enabledRounds };
         }
         
-        // 2. 【兼容旧版】尝试从 Custom XML 中"解冻"状态（如果 LocalStorage 为空）
-        /* 已移除 Custom XML 干扰逻辑以提高稳定性 */
-        
-        // 3. 数据准备好后再构建表单
-        buildForm();
-        
-        // 4. 【新增】加载 AI 识别的字段并渲染到表单
+        // 2. 加载 AI 识别的字段
         try {
             const aiFields = await loadAIFieldsFromDocument();
             if (aiFields && aiFields.length > 0) {
@@ -6446,43 +5984,34 @@ if (typeof Office !== 'undefined') {
             console.warn("[Init] 加载 AI 字段失败:", e);
         }
         
-        // 4a. 【新增】加载自定义字段并恢复到配置中
+        // 3. 加载自定义字段
         try {
             const customFields = await loadCustomFieldsFromDocument();
             if (customFields && customFields.length > 0) {
                 console.log(`[Init] 从文档加载了 ${customFields.length} 个自定义字段`);
                 
-                // 恢复字段到 contractConfig 或 pendingFields
                 customFields.forEach(field => {
                     if (field.isPending) {
-                        // 恢复到待放置区
                         if (!pendingFields.some(f => f.tag === field.tag)) {
-                            const restoredField = { ...field };
-                            delete restoredField.isPending;
-                            pendingFields.push(restoredField);
+                            pendingFields.push({ ...field });
                         }
                     } else if (field.sectionId) {
-                        // 恢复到指定 section
                         const targetSection = contractConfig.find(s => s.id === field.sectionId);
                         if (targetSection && targetSection.fields) {
-                            // 检查是否已存在（避免重复）
                             if (!targetSection.fields.some(f => f.tag === field.tag)) {
-                                const restoredField = { ...field };
-                                delete restoredField.sectionId;
-                                targetSection.fields.push(restoredField);
+                                targetSection.fields.push({ ...field });
                             }
                         }
                     }
                 });
-                
-                // 如果恢复了字段，重新构建表单
-                buildForm();
-                renderCustomFieldsPanel();
-                console.log(`[Init] 自定义字段已恢复`);
             }
         } catch (e) {
             console.warn("[Init] 加载自定义字段失败:", e);
         }
+        
+        // 4. 构建最终表单
+        buildForm();
+        renderCustomFieldsPanel();
         
         // 5. 绑定紧急工具按钮
         bindEmergencyTools();
@@ -8177,6 +7706,7 @@ function setEditOptions(options) {
 function addCustomFieldFromModal() {
     const label = document.getElementById("field-label").value.trim();
     const type = document.getElementById("field-type").value;
+    const formatFn = document.getElementById("field-formatFn").value;
     const insertMode = document.querySelector('#add-field-modal input[name="insert-mode"]:checked')?.value || "insert";
     
     // 验证
@@ -8220,6 +7750,7 @@ function addCustomFieldFromModal() {
         label,
         tag,
         type,
+        formatFn: formatFn !== 'none' ? formatFn : undefined,
         options: options.length > 0 ? options : undefined,
         hasParagraphToggle: insertMode === "paragraph" || insertMode === "both",
         isCustom: true  // 标记为自定义字段
@@ -8364,6 +7895,20 @@ function showFieldEditModal(sectionId, fieldIndex, field) {
                         </select>
                     </div>
                     
+                    <div class="form-group-modal">
+                        <label>输出格式化 (formatFn)</label>
+                        <select id="ufm-formatFn" class="modal-input">
+                            <option value="none">无格式 (直接替换)</option>
+                            <option value="dateUnderline">日期: 2024年01月15日</option>
+                            <option value="dateYearMonth">年月: 2024年01月</option>
+                            <option value="chineseNumber">大写: 壹佰（100）</option>
+                            <option value="chineseNumberWan">大写万元: 壹佰（100）万元</option>
+                            <option value="amountWithChinese">金额大写: 685000元（大写：...）</option>
+                            <option value="articleNumber">条款编号: 第五条</option>
+                            <option value="percentageChinese">比例大写: 百分之十</option>
+                        </select>
+                    </div>
+                    
                     <div class="form-group-modal" id="ufm-options-group" style="display:none;">
                         <label>选项列表</label>
                         <div class="options-list" id="ufm-options-list"></div>
@@ -8397,6 +7942,7 @@ function showFieldEditModal(sectionId, fieldIndex, field) {
     document.getElementById("ufm-label").value = field.label || "";
     document.getElementById("ufm-tag").value = field.tag || "";
     document.getElementById("ufm-type").value = field.type || "text";
+    document.getElementById("ufm-formatFn").value = field.formatFn || "none";
     
     // 选项 - 使用选项列表
     const optionsGroup = document.getElementById("ufm-options-group");
@@ -8455,6 +8001,7 @@ function saveFieldEdit() {
     const fieldIndex = parseInt(document.getElementById("ufm-field-index").value);
     const newLabel = document.getElementById("ufm-label").value.trim();
     const newType = document.getElementById("ufm-type").value;
+    const newFormatFn = document.getElementById("ufm-formatFn").value;
     const targetSectionId = document.getElementById("ufm-target-section").value;
     
     if (!newLabel) {
@@ -8474,6 +8021,7 @@ function saveFieldEdit() {
     // 更新字段属性
     field.label = newLabel;
     field.type = newType;
+    field.formatFn = newFormatFn !== 'none' ? newFormatFn : undefined;
     
     // 更新选项 - 从临时数组读取
     if (newType === "select" || newType === "radio") {

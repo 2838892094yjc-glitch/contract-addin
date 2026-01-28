@@ -1297,6 +1297,9 @@
                     <button id="btn-auto-generate" class="btn-primary-sm" style="width:100%;background:linear-gradient(135deg, #6366f1, #8b5cf6);margin-top:8px;" onclick="autoGenerateForm()">
                         <i class="ms-Icon ms-Icon--Wand"></i> 自动生成表单
                     </button>
+                    <button id="btn-load-pevc" class="btn-primary-sm" style="width:100%;background:linear-gradient(135deg, #f59e0b, #d97706);margin-top:8px;" onclick="loadPEVCTemplate()">
+                        <i class="ms-Icon ms-Icon--TableComputed"></i> 加载 PEVC 模板
+                    </button>
                     <button id="btn-undo-embed" class="btn-primary-sm" style="width:100%;background:#ef4444;margin-top:8px;display:none;" onclick="undoAutoEmbed()">
                         <i class="ms-Icon ms-Icon--Undo"></i> 撤销埋点
                     </button>
@@ -1451,6 +1454,19 @@
                         <option value="radio">单选按钮</option>
                     </select>
                 </div>
+                <div class="modal-field-group">
+                    <label>输出格式化 (formatFn)</label>
+                    <select id="field-formatFn">
+                        <option value="none">无格式 (直接替换)</option>
+                        <option value="dateUnderline">日期: 2024年01月15日</option>
+                        <option value="dateYearMonth">年月: 2024年01月</option>
+                        <option value="chineseNumber">大写: 壹佰（100）</option>
+                        <option value="chineseNumberWan">大写万元: 壹佰（100）万元</option>
+                        <option value="amountWithChinese">金额大写: 685000元（大写：...）</option>
+                        <option value="articleNumber">条款编号: 第五条</option>
+                        <option value="percentageChinese">比例大写: 百分之十</option>
+                    </select>
+                </div>
                 <div class="modal-field-group" id="options-group" style="display:none;">
                     <label>选项列表</label>
                     <div class="options-list" id="field-options-list">
@@ -1514,6 +1530,19 @@
                         <option value="radio">单选按钮</option>
                     </select>
                 </div>
+                <div class="modal-field-group">
+                    <label>输出格式化 (formatFn)</label>
+                    <select id="edit-field-formatFn">
+                        <option value="none">无格式 (直接替换)</option>
+                        <option value="dateUnderline">日期: 2024年01月15日</option>
+                        <option value="dateYearMonth">年月: 2024年01月</option>
+                        <option value="chineseNumber">大写: 壹佰（100）</option>
+                        <option value="chineseNumberWan">大写万元: 壹佰（100）万元</option>
+                        <option value="amountWithChinese">金额大写: 685000元（大写：...）</option>
+                        <option value="articleNumber">条款编号: 第五条</option>
+                        <option value="percentageChinese">比例大写: 百分之十</option>
+                    </select>
+                </div>
                 <div class="modal-field-group" id="edit-options-group" style="display:none;">
                     <label>选项（每行一个）</label>
                     <textarea id="edit-field-options" rows="3" placeholder="选项1&#10;选项2&#10;选项3"></textarea>
@@ -1529,7 +1558,8 @@
         </div>
     </div>
 
-    <!-- 引入新模块（加版本号强制刷新缓存） -->
+    <!-- 引入模板和新模块（加版本号强制刷新缓存） -->
+    <script type="text/javascript" src="templates/pevc-default.js?v=20260128"></script>
     <script type="text/javascript" src="formatters.js?v=20260120d"></script>
     <script type="text/javascript" src="ai-parser.js?v=20260120d"></script>
     <script type="text/javascript" src="ai-skill.js?v=20260120d"></script>
