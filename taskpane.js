@@ -45,9 +45,21 @@ async function loadPEVCTemplate() {
     if (!confirmed) return;
     
     contractConfig = JSON.parse(JSON.stringify(PEVC_DEFAULT_TEMPLATE));
+    
+    // 为模板中的所有字段添加 isCustom 标记，确保它们能保存到文档
+    contractConfig.forEach(section => {
+        if (section.fields) {
+            section.fields.forEach(field => {
+                field.isCustom = true;
+            });
+        }
+    });
+    
     console.log("[Template] Loaded PEVC template, fields:", contractConfig.length);
     
-    saveFormConfig();
+    // 强制保存到文档
+    DocumentStateManager.save(true);
+    
     buildForm();
     showNotification("PEVC 模板加载成功", "success");
 }
@@ -376,7 +388,7 @@ function collectFormData() {
  * 负责管理所有文档私有的表单结构和数据，实现完全的文档隔离
  */
 const DocumentStateManager = {
-    STATE_KEY: "AddinState_V1",
+    STATE_KEY: "ContractAddin_State_V2",
     _isSaving: false,
     _pendingSave: false,
     _lastSavedFingerprint: "",
@@ -437,6 +449,10 @@ const DocumentStateManager = {
                 enabledRounds,
                 enabledCurrentInvestors,
                 enabledExistingShareholders
+            },
+            uiState: {
+                scrollTop: document.querySelector(".main-content")?.scrollTop || 0,
+                lastSection: document.querySelector(".step-item.active")?.dataset.sectionId || null
             },
             version: CURRENT_CONFIG_VERSION,
             timestamp: Date.now()
@@ -3642,6 +3658,11 @@ async function aiRecognizeCoreWithSkill() {
             console.table(embedResult.errors.slice(0, 10)); // 只显示前10个错误
         }
         
+        // 成功埋点后，强制保存状态到文档
+        if (embedResult.success > 0) {
+            DocumentStateManager.save(true);
+        }
+        
         return embedResult;
         
     } catch (error) {
@@ -5731,6 +5752,7 @@ if (typeof Office !== 'undefined') {
             
             if (savedState) {
                 console.log("[Init] 发现文档存档，正在恢复...");
+                document.getElementById("new-doc-guide").style.display = "none";
                 
                 // 恢复表单结构
                 if (savedState.config && savedState.config.length > 0) {
@@ -5754,7 +5776,8 @@ if (typeof Office !== 'undefined') {
                     if (savedState.rounds.enabledExistingShareholders) enabledExistingShareholders = savedState.rounds.enabledExistingShareholders;
                 }
             } else {
-                console.log("[Init] 新文档，加载默认基础表单");
+                console.log("[Init] 新文档，显示引导界面");
+                document.getElementById("new-doc-guide").style.display = "block";
             }
             
             // 2. 构建并渲染表单
@@ -7135,12 +7158,8 @@ function loadPendingFields() {
  * 保存待放置字段
  */
 function savePendingFields() {
-    try {
-        localStorage.setItem(PENDING_FIELDS_KEY, JSON.stringify(pendingFields));
-        console.log("[PendingFields] 已保存", pendingFields.length, "个待放置字段");
-    } catch (e) {
-        console.warn("[PendingFields] 保存失败:", e.message);
-    }
+    // 已废弃：pendingFields 现已包含在 DocumentStateManager 中随文档保存
+    console.log("[PendingFields] savePendingFields 已废弃");
 }
 
 /**
@@ -7528,6 +7547,9 @@ function addCustomFieldFromModal() {
     // 重新渲染底部面板
     renderCustomFieldsPanel();
     
+    // 强制保存状态到文档
+    DocumentStateManager.save(true);
+    
     hideAddFieldModal();
     showNotification(`已创建字段: ${label}，请拖拽到表单中放置`, "success");
 }
@@ -7815,6 +7837,9 @@ function saveFieldEdit() {
     // 重新构建表单
     buildForm();
     
+    // 强制保存状态到文档
+    DocumentStateManager.save(true);
+    
     hideFieldEditModal();
     showNotification(`字段 "${newLabel}" 已更新`, "success");
 }
@@ -7853,6 +7878,9 @@ function deleteFieldInSection() {
             
             // 重新构建表单
             buildForm();
+            
+            // 强制保存状态到文档
+            DocumentStateManager.save(true);
             
             showNotification(`字段 "${fieldLabel}" 已删除`, "success");
         }
@@ -8007,6 +8035,9 @@ function handleDrop(e) {
                     if (mc) mc.scrollTop = scrollTop;
                 });
                 
+                // 强制保存状态到文档
+                DocumentStateManager.save(true);
+                
                 showNotification("字段位置已更新", "success");
             } else {
                 showNotification("移动失败", "error");
@@ -8050,6 +8081,9 @@ function handleDrop(e) {
                 const mc = document.querySelector(".main-content");
                 if (mc) mc.scrollTop = scrollTop;
             });
+            
+            // 强制保存状态到文档
+            DocumentStateManager.save(true);
             
             showNotification(`已将 "${newField.label}" 放置到表单`, "success");
         } else {
@@ -8187,6 +8221,22 @@ function initCustomFieldsManager() {
             }).then(confirmed => {
                 if (confirmed) resetFormConfig();
             });
+        });
+    }
+
+    // 【新增】清除文档存档按钮
+    const clearDocBtn = document.getElementById("btn-clear-doc-state");
+    if (clearDocBtn) {
+        clearDocBtn.addEventListener("click", async () => {
+            const confirmed = await showConfirmDialog("确定要清除保存在此文档内的所有表单配置和数据吗？此操作不可撤销，且会重置插件界面。", {
+                confirmText: "确认删除",
+                cancelText: "取消",
+                confirmStyle: "background:#ef4444; color:#fff;"
+            });
+            if (confirmed) {
+                await DocumentStateManager.clear();
+                window.location.reload(); // 重新加载插件以恢复初始状态
+            }
         });
     }
     

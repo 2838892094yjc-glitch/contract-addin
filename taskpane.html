@@ -1370,6 +1370,28 @@
                 <!-- JavaScript 会自动往这里填充内容 -->
             </div>
 
+            <!-- 【新增】新文档引导界面 -->
+            <div id="new-doc-guide" class="dashboard-card" style="display:none; margin-top: 24px; border: 2px dashed var(--accent-color); background: rgba(42, 133, 255, 0.02);">
+                <div class="dashboard-title">
+                    <i class="ms-Icon ms-Icon--CompassNW"></i> 开始设计您的合同
+                </div>
+                <p style="font-size:13px; color:var(--text-secondary); margin-bottom:20px;">
+                    这是一个全新的文档，目前没有表单配置。您可以选择以下方式开始：
+                </p>
+                <div style="display:grid; grid-template-columns: 1fr; gap: 12px;">
+                    <button class="btn-primary-sm" style="justify-content:center; height:44px; background:linear-gradient(135deg, #6366f1, #8b5cf6);" onclick="autoGenerateForm()">
+                        <i class="ms-Icon ms-Icon--Wand" style="margin-right:8px;"></i> AI 智能识别变量
+                    </button>
+                    <button class="btn-primary-sm" style="justify-content:center; height:44px; background:linear-gradient(135deg, #f59e0b, #d97706);" onclick="loadPEVCTemplate()">
+                        <i class="ms-Icon ms-Icon--TableComputed" style="margin-right:8px;"></i> 加载 PEVC 默认模板
+                    </button>
+                    <button class="btn-primary-sm" style="justify-content:center; height:44px; background:var(--primary-color);" onclick="showAddFieldModal()">
+                        <i class="ms-Icon ms-Icon--Add" style="margin-right:8px;"></i> 手动添加字段
+                    </button>
+                </div>
+            </div>
+
+
             <!-- 合同交付区域 -->
             <div id="section-finalize" class="dashboard-card" style="margin-top: 24px;">
                 <div class="dashboard-title">
@@ -1421,6 +1443,10 @@
                 </button>
                 <button class="drawer-action-btn" id="btn-reset-config" title="重置为默认" style="background:rgba(239,68,68,0.2);">
                     <i class="ms-Icon ms-Icon--Refresh" aria-hidden="true"></i> 重置
+                </button>
+                <!-- 【新增】重置文档存储按钮 -->
+                <button class="drawer-action-btn" id="btn-clear-doc-state" title="清除文档内存储的所有表单数据" style="background:#fee2e2; color:#dc2626; border:1px solid #fecaca;">
+                    <i class="ms-Icon ms-Icon--Delete" aria-hidden="true"></i> 清除存档
                 </button>
                 <input type="file" id="import-config-input" accept=".json" style="display:none;">
                 <button class="drawer-close" id="drawer-close">
