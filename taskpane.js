@@ -54,63 +54,40 @@ async function loadPEVCTemplate() {
 window.loadPEVCTemplate = loadPEVCTemplate;
 
 /**
- * 加载表单配置（优先从 LocalStorage，否则使用默认空配置）
+ * 初始化基础表单配置（不再从 LocalStorage 加载结构）
  */
 async function loadFormConfig() {
-    console.log("[FormConfig] 开始加载配置...");
-    
-    // 1. 尝试从 LocalStorage 加载
-    try {
-        const savedVersion = localStorage.getItem(FORM_CONFIG_VERSION_KEY);
-        const savedConfig = localStorage.getItem(FORM_CONFIG_KEY);
-        
-        if (savedConfig && savedVersion === CURRENT_CONFIG_VERSION) {
-            contractConfig = JSON.parse(savedConfig);
-            console.log("[FormConfig] 从 LocalStorage 加载配置，共", contractConfig.length, "个 sections");
-            return true;
-        } else if (savedConfig && (savedVersion !== CURRENT_CONFIG_VERSION)) {
-            console.log("[FormConfig] 配置版本不匹配 (" + savedVersion + " vs " + CURRENT_CONFIG_VERSION + ")，执行强制清理");
-            localStorage.removeItem(FORM_CONFIG_KEY);
-            localStorage.removeItem(FORM_CONFIG_VERSION_KEY);
-        }
-    } catch (e) {
-        console.warn("[FormConfig] LocalStorage 读取失败:", e.message);
-    }
-    
-    // 2. 默认清空配置
+    console.log("[FormConfig] 初始化基础结构...");
     contractConfig = JSON.parse(JSON.stringify(DEFAULT_CONTRACT_CONFIG));
-    console.log("[FormConfig] 配置已重置为空（仅保留基础结构）");
     return true;
-}
-function saveFormConfig() {
-    try {
-        localStorage.setItem(FORM_CONFIG_KEY, JSON.stringify(contractConfig));
-        localStorage.setItem(FORM_CONFIG_VERSION_KEY, CURRENT_CONFIG_VERSION);
-        console.log("[FormConfig] 配置已保存到 LocalStorage");
-        
-        // 同时保存自定义字段到文档
-        const customFields = collectCustomFields();
-        if (customFields.length > 0) {
-            saveCustomFieldsToDocument(customFields).catch(err => {
-                console.warn("[FormConfig] 保存自定义字段到文档失败:", err);
-            });
-        }
-    } catch (e) {
-        console.warn("[FormConfig] 保存失败:", e.message);
-    }
 }
 
 /**
- * 重置表单配置为默认值
+ * 废弃：不再单独保存配置到 LocalStorage
+ * 结构保存将由 DocumentStateManager 统一处理
+ */
+function saveFormConfig() {
+    // 仅保留空实现以防其他地方调用
+}
+
+/**
+ * 重置表单配置（清除文档中的数据）
  */
 async function resetFormConfig() {
-    console.log("[FormConfig] 重置为默认配置...");
-    localStorage.removeItem(FORM_CONFIG_KEY);
-    localStorage.removeItem(FORM_CONFIG_VERSION_KEY);
+    const confirmed = await showConfirmDialog("确定要重置当前文档的表单配置吗？所有自定义修改将丢失。", {
+        confirmText: "重置",
+        cancelText: "取消"
+    });
+    
+    if (!confirmed) return;
+
+    console.log("[FormConfig] 重置当前文档配置...");
+    if (window.DocumentStateManager) {
+        await window.DocumentStateManager.clear();
+    }
     await loadFormConfig();
-    // 重新构建表单
     buildForm();
-    showNotification("表单配置已重置为默认值", "success");
+    showNotification("当前文档配置已重置", "success");
 }
 
 /**
@@ -268,42 +245,17 @@ const LS_ENABLED_SHAREHOLDERS_KEY = "contract_addin:enabledExistingShareholders"
 /**
  * 将当前表单状态写入 LocalStorage (实时同步)
  */
-function saveFormStateToLocalStorage(formData, roundsState, investorsState, shareholdersState) {
-    try {
-        localStorage.setItem(LS_FORM_STATE_KEY, JSON.stringify(formData || {}));
-        localStorage.setItem(LS_ENABLED_ROUNDS_KEY, JSON.stringify(roundsState || enabledRounds));
-        localStorage.setItem(LS_ENABLED_INVESTORS_KEY, JSON.stringify(investorsState || enabledCurrentInvestors));
-        localStorage.setItem(LS_ENABLED_SHAREHOLDERS_KEY, JSON.stringify(shareholdersState || enabledExistingShareholders));
-        console.log("[LS] Form state saved to LocalStorage");
-    } catch (e) {
-        console.warn("[LS] Failed to save form state:", e);
-    }
+/**
+ * 废弃：不再将表单状态写入 LocalStorage
+ */
+function saveFormStateToLocalStorage() {
+    // 已废弃
 }
 
 /**
- * 从 LocalStorage 读取表单状态
- * @returns {{ formData: object, enabledRounds: object, enabledCurrentInvestors: object, enabledExistingShareholders: object } | null}
+ * 废弃：不再从 LocalStorage 读取表单状态
  */
 function loadFormStateFromLocalStorage() {
-    try {
-        const formDataStr = localStorage.getItem(LS_FORM_STATE_KEY);
-        const roundsStr = localStorage.getItem(LS_ENABLED_ROUNDS_KEY);
-        const investorsStr = localStorage.getItem(LS_ENABLED_INVESTORS_KEY);
-        const shareholdersStr = localStorage.getItem(LS_ENABLED_SHAREHOLDERS_KEY);
-        
-        if (formDataStr || roundsStr || investorsStr || shareholdersStr) {
-            const result = {
-                formData: formDataStr ? JSON.parse(formDataStr) : {},
-                enabledRounds: roundsStr ? JSON.parse(roundsStr) : {},
-                enabledCurrentInvestors: investorsStr ? JSON.parse(investorsStr) : {},
-                enabledExistingShareholders: shareholdersStr ? JSON.parse(shareholdersStr) : {}
-            };
-            console.log("[LS] Form state loaded from LocalStorage:", Object.keys(result.formData).length, "fields");
-            return result;
-        }
-    } catch (e) {
-        console.warn("[LS] Failed to load form state:", e);
-    }
     return null;
 }
 
@@ -383,14 +335,17 @@ async function applyPlaceholderToCurrentDoc(formData) {
 }
 
 // ---------------- 收集表单数据 (递归平铺) ----------------
-function collectFormData(skipLocalStorageSave = false) {
+/**
+ * 收集当前表单的所有数据
+ */
+function collectFormData() {
     const container = document.getElementById("dynamic-form-container");
     if (!container) return {};
 
     const result = {};
 
     function collectRecursive(parentEl) {
-        const inputs = parentEl.querySelectorAll("input, select");
+        const inputs = parentEl.querySelectorAll("input, select, textarea");
         inputs.forEach(input => {
             const tag = input.dataset.tag;
             if (!tag) return;
@@ -398,14 +353,14 @@ function collectFormData(skipLocalStorageSave = false) {
             let val = null;
             if (input.type === "radio") {
                 if (input.checked) val = input.value;
+            } else if (input.type === "checkbox") {
+                // 如果需要支持多选，这里可以扩展
+                val = input.checked;
             } else {
                 val = input.value;
             }
 
-            // 如果有值，或者是被选中的radio
             if (val !== null) {
-                // 如果已存在且当前是未选中的radio，不覆盖
-                // 但 querySelectorAll 是顺序遍历，radio 组通常只有一个 checked
                 if (input.type === "radio" && !input.checked) return;
                 result[tag] = val;
             }
@@ -413,14 +368,135 @@ function collectFormData(skipLocalStorageSave = false) {
     }
     
     collectRecursive(container);
-    
-    // 【双轨同步】每次收集后，立即存入 LocalStorage
-    if (!skipLocalStorageSave) {
-        saveFormStateToLocalStorage(result, enabledRounds, enabledCurrentInvestors, enabledExistingShareholders);
-    }
-    
     return result;
 }
+
+/**
+ * 文档状态管理器
+ * 负责管理所有文档私有的表单结构和数据，实现完全的文档隔离
+ */
+const DocumentStateManager = {
+    STATE_KEY: "AddinState_V1",
+    _isSaving: false,
+    _pendingSave: false,
+    _lastSavedFingerprint: "",
+
+    /**
+     * 生成状态对象的唯一指纹，用于判断是否需要真正写入
+     */
+    _getFingerprint(state) {
+        const str = JSON.stringify(state);
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash |= 0;
+        }
+        return `${str.length}_${hash}`;
+    },
+
+    /**
+     * 从文档 Settings 加载状态
+     */
+    async load() {
+        console.log("[StateMgr] 正在从文档加载状态...");
+        if (typeof Word === 'undefined') return null;
+
+        try {
+            return await Word.run(async (context) => {
+                const settings = context.document.settings;
+                const data = await readFromSettingsChunked(context, settings, this.STATE_KEY);
+                if (data) {
+                    const state = JSON.parse(data);
+                    this._lastSavedFingerprint = this._getFingerprint(state);
+                    console.log("[StateMgr] 成功从文档加载状态");
+                    return state;
+                }
+                return null;
+            });
+        } catch (e) {
+            console.warn("[StateMgr] 加载失败:", e);
+            return null;
+        }
+    },
+
+    /**
+     * 保存状态到文档 Settings
+     * 使用防抖调用此方法
+     */
+    async save(force = false) {
+        if (this._isSaving) {
+            this._pendingSave = true;
+            return;
+        }
+
+        const state = {
+            config: contractConfig,
+            pendingFields: pendingFields,
+            formData: collectFormData(),
+            rounds: {
+                enabledRounds,
+                enabledCurrentInvestors,
+                enabledExistingShareholders
+            },
+            version: CURRENT_CONFIG_VERSION,
+            timestamp: Date.now()
+        };
+
+        const currentFingerprint = this._getFingerprint(state);
+        if (!force && currentFingerprint === this._lastSavedFingerprint) {
+            console.log("[StateMgr] 数据未变更，跳过写入");
+            return;
+        }
+
+        this._isSaving = true;
+        console.log("[StateMgr] 开始异步保存到文档...");
+
+        try {
+            // 强制排队执行
+            await wordActionQueue.add(async () => {
+                await Word.run(async (context) => {
+                    const settings = context.document.settings;
+                    await saveToSettingsChunked(context, settings, this.STATE_KEY, JSON.stringify(state));
+                    await context.sync();
+                });
+            });
+            this._lastSavedFingerprint = currentFingerprint;
+            console.log("[StateMgr] ✅ 文档状态已同步");
+        } catch (e) {
+            console.error("[StateMgr] ❌ 保存失败:", e);
+        } finally {
+            this._isSaving = false;
+            if (this._pendingSave) {
+                this._pendingSave = false;
+                setTimeout(() => this.save(), 500);
+            }
+        }
+    },
+
+    /**
+     * 彻底清除文档中的状态
+     */
+    async clear() {
+        if (typeof Word === 'undefined') return;
+        try {
+            await Word.run(async (context) => {
+                const settings = context.document.settings;
+                await saveToSettingsChunked(context, settings, this.STATE_KEY, null);
+                await context.sync();
+            });
+            this._lastSavedFingerprint = "";
+            console.log("[StateMgr] 已清除文档状态");
+        } catch (e) {
+            console.warn("[StateMgr] 清除失败:", e);
+        }
+    }
+};
+
+// 智能保存：用户停止操作 2.5 秒后触发
+const scheduleSmartSave = debounce(() => {
+    DocumentStateManager.save();
+}, 2500);
+
 
 // 自动应用
 function autoApplyToCurrentDoc() {
@@ -1073,8 +1149,11 @@ function buildForm() {
                             const mappedValue = field.valueMap ? field.valueMap[opt] : opt;
                             updateContent(field.tag, mappedValue, field.label); // 实时更新当前文档
                         }
-                        scheduleAutoSync(); // 触发云端同步
-                        updateSectionProgress(); // 【新增】更新进度
+                        
+                        // 触发保存与同步
+                        scheduleSmartSave();
+                        scheduleAutoSync(); 
+                        updateSectionProgress(); 
                         
                         // 联动 SubFields
                         if (field.subFields) {
@@ -1117,8 +1196,10 @@ function buildForm() {
                     // 检查是否有值映射 (valueMap)
                     const mappedValue = field.valueMap ? field.valueMap[select.value] : select.value;
                     updateContent(field.tag, mappedValue, field.label);
+                    
+                    scheduleSmartSave();
                     scheduleAutoSync();
-                    updateSectionProgress(); // 【新增】更新进度
+                    updateSectionProgress();
                 });
                 wrapper.appendChild(select);
 
@@ -1142,7 +1223,8 @@ function buildForm() {
                         console.log("[ShareholderCount] 用户手动编辑，停止自动更新");
                     }
                     
-                    debounce(() => {
+                    // 1. 实时应用格式并更新文档（原有逻辑，带较短防抖）
+                    const updateDoc = debounce(() => {
                         let formattedValue = input.value;
                         if (field.formatFn === "dateUnderline") {
                             formattedValue = formatDateUnderline(input.value);
@@ -1152,11 +1234,22 @@ function buildForm() {
                             formattedValue = formatChineseNumber(input.value);
                         }
                         updateContent(field.tag, formattedValue, field.label);
-                    }, 600)();
+                    }, 600);
+                    updateDoc();
+
+                    // 2. 触发智能保存到文档 Settings (长防抖)
+                    scheduleSmartSave();
+                    
                     scheduleAutoSync();
                     updateSectionProgress();
                 });
+
+                // 失去焦点时立即保存
+                input.addEventListener("blur", () => {
+                    DocumentStateManager.save();
+                });
                 wrapper.appendChild(input);
+
             }
 
             // SubFields Container (递归)
@@ -2962,6 +3055,8 @@ function createAIFieldElement(field, isNested = false) {
         toggleBtn.onclick = async () => {
             // 调用现有的 toggle 机制
             await toggleParagraph(pinyinTag, toggleBtn);
+            // 触发智能保存
+            scheduleSmartSave();
         };
         
         toggleContainer.appendChild(toggleBtn);
@@ -2994,13 +3089,22 @@ function createAIFieldElement(field, isNested = false) {
             background: white;
         `;
         
-        // 输入时同步到文档
-        // #region agent log
-        input.addEventListener('input', debounce(async () => {
-            console.log(`[DEBUG-INPUT] AI字段输入触发: tag=${pinyinTag}, value="${input.value}"`);
-            await applyAIFieldToDocument(pinyinTag, input.value || `[${field.label}]`);
-        }, 500));
-        // #endregion
+        // 输入时同步到文档并智能保存
+        input.addEventListener('input', () => {
+            const updateDoc = debounce(async () => {
+                console.log(`[AI Sync] 正在更新文档: tag=${pinyinTag}, value="${input.value}"`);
+                await applyAIFieldToDocument(pinyinTag, input.value || `[${field.label}]`);
+            }, 600);
+            updateDoc();
+            
+            // 触发智能保存
+            scheduleSmartSave();
+        });
+
+        // 失去焦点立即保存
+        input.addEventListener('blur', () => {
+            DocumentStateManager.save();
+        });
         
         wrapper.appendChild(input);
     }
@@ -5612,89 +5716,82 @@ async function batchAlignRoundVisibility(targetEnabledRounds, targetEnabledInves
 // ---------------- Office 初始化 ----------------
 if (typeof Office !== 'undefined') {
     Office.onReady(async (info) => {
-        // 在 Word Online 环境下，即便 info.host 为空也尝试初始化表单
         console.log("Office.onReady triggered", info);
         
-        // #region agent log - 假设 A: 检测 pinyin-pro 全局变量
-        const pinyinCheck = {
-            pinyinPro: typeof pinyinPro,
-            pinyin: typeof pinyin,
-            window_pinyinPro: typeof window?.pinyinPro,
-            window_pinyin: typeof window?.pinyin,
-            windowKeys: Object.keys(window).filter(k => k.toLowerCase().includes('pinyin'))
-        };
-        console.log('[DEBUG-A] pinyin-pro 全局变量检测:', pinyinCheck);
-        fetch('http://127.0.0.1:7242/ingest/43fd6a23-dd95-478c-a700-bed9820a26db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'taskpane.js:Office.onReady',message:'pinyin-pro全局变量检测',data:pinyinCheck,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        
-        // 0. 加载基础配置（如果是空文档，则只有“所需文件”）
-        await loadFormConfig();
-        
-        // 1. 【双轨同步】优先从 LocalStorage 加载状态
-        const lsState = loadFormStateFromLocalStorage();
-        if (lsState) {
-            console.log("[Init] Using LocalStorage as primary state source");
-            if (lsState.formData) lastLoadedFormData = lsState.formData;
-            if (lsState.enabledRounds) enabledRounds = { ...enabledRounds, ...lsState.enabledRounds };
-        }
-        
-        // 2. 加载 AI 识别的字段
+        // 显示 Loading
+        const loadingOverlay = document.getElementById("app-loading-overlay");
+        if (loadingOverlay) loadingOverlay.style.display = "flex";
+
         try {
-            const aiFields = await loadAIFieldsFromDocument();
-            if (aiFields && aiFields.length > 0) {
-                console.log(`[Init] 从文档加载了 ${aiFields.length} 个 AI 字段`);
-                renderAIFieldsInForm(aiFields);
-            }
-        } catch (e) {
-            console.warn("[Init] 加载 AI 字段失败:", e);
-        }
-        
-        // 3. 加载自定义字段
-        try {
-            const customFields = await loadCustomFieldsFromDocument();
-            if (customFields && customFields.length > 0) {
-                console.log(`[Init] 从文档加载了 ${customFields.length} 个自定义字段`);
+            // 0. 初始化基础配置
+            await loadFormConfig();
+            
+            // 1. 从文档 Settings 加载状态 (取代 LocalStorage)
+            const savedState = await DocumentStateManager.load();
+            
+            if (savedState) {
+                console.log("[Init] 发现文档存档，正在恢复...");
                 
-                customFields.forEach(field => {
-                    if (field.isPending) {
-                        if (!pendingFields.some(f => f.tag === field.tag)) {
-                            pendingFields.push({ ...field });
-                        }
-                    } else if (field.sectionId) {
-                        const targetSection = contractConfig.find(s => s.id === field.sectionId);
-                        if (targetSection && targetSection.fields) {
-                            if (!targetSection.fields.some(f => f.tag === field.tag)) {
-                                targetSection.fields.push({ ...field });
-                            }
-                        }
-                    }
-                });
+                // 恢复表单结构
+                if (savedState.config && savedState.config.length > 0) {
+                    contractConfig = savedState.config;
+                }
+                
+                // 恢复待放置字段
+                if (savedState.pendingFields) {
+                    pendingFields = savedState.pendingFields;
+                }
+                
+                // 恢复表单数据
+                if (savedState.formData) {
+                    lastLoadedFormData = savedState.formData;
+                }
+                
+                // 恢复轮次状态
+                if (savedState.rounds) {
+                    if (savedState.rounds.enabledRounds) enabledRounds = savedState.rounds.enabledRounds;
+                    if (savedState.rounds.enabledCurrentInvestors) enabledCurrentInvestors = savedState.rounds.enabledCurrentInvestors;
+                    if (savedState.rounds.enabledExistingShareholders) enabledExistingShareholders = savedState.rounds.enabledExistingShareholders;
+                }
+            } else {
+                console.log("[Init] 新文档，加载默认基础表单");
             }
-        } catch (e) {
-            console.warn("[Init] 加载自定义字段失败:", e);
-        }
-        
-        // 4. 构建最终表单
-        buildForm();
-        renderCustomFieldsPanel();
-        
-        // 5. 绑定紧急工具按钮
-        bindEmergencyTools();
-        
-        // 6. 【新增】注册 Content Control 进入事件，实现双向跳转
-        try {
-            await registerContentControlEvents();
-        } catch (e) {
-            console.warn("[Init] Content Control 事件注册失败:", e);
-        }
-        
-        // 7. 【新增】检查并显示撤销按钮
-        try {
-            await checkAndShowUndoButton();
-        } catch (e) {
-            console.warn("[Init] 检查撤销按钮失败:", e);
+            
+            // 2. 构建并渲染表单
+            buildForm();
+            renderCustomFieldsPanel();
+            
+            // 3. 注册 Content Control 事件
+            try {
+                await registerContentControlEvents();
+            } catch (e) {
+                console.warn("[Init] 事件注册失败:", e);
+            }
+            
+            // 4. 检查撤销按钮
+            try {
+                await checkAndShowUndoButton();
+            } catch (e) {
+                console.warn("[Init] 检查撤销按钮失败:", e);
+            }
+
+            // 5. 绑定紧急工具
+            bindEmergencyTools();
+
+        } catch (err) {
+            console.error("[Init] 初始化失败:", err);
+            showNotification("初始化失败: " + err.message, "error");
+        } finally {
+            // 隐藏 Loading
+            if (loadingOverlay) loadingOverlay.style.display = "none";
         }
     });
+
+    // 窗口关闭/刷新前尝试保存一次
+    window.addEventListener("beforeunload", () => {
+        DocumentStateManager.save();
+    });
+
 } else {
     // 允许在浏览器预览模式下加载表单
     document.addEventListener("DOMContentLoaded", async () => {
